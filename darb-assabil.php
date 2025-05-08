@@ -97,3 +97,22 @@ add_action( 'plugins_loaded', function() {
 		});
 	}
 } );
+
+/**
+ * Save default values in the database on plugin activation
+ */
+function darb_assabil_activate_plugin() {
+    // Set default values for the options
+    if (empty(get_option('darb_assabil_use_city_dropdown'))) {
+        update_option('darb_assabil_use_city_dropdown', true);
+    }
+
+    if (empty(get_option('darb_assabil_payment_done_by_receiver'))) {
+        update_option('darb_assabil_payment_done_by_receiver', true);
+    }
+
+    if (empty(get_option('darb_assabil_include_product_payment'))) {
+        update_option('darb_assabil_include_product_payment', true);
+    }
+}
+register_activation_hook(__FILE__, 'darb_assabil_activate_plugin');

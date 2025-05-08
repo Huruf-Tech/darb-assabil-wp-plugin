@@ -104,6 +104,25 @@ class Checkout {
 			$fields['billing']['billing_city']['options'] = $libyan_cities;
 		}
 
+		// Modify the phone fields' required property
+		if (isset($fields['billing']['billing_phone'])) {
+			$fields['billing']['billing_phone']['required'] = true;
+		}
+	
+		if (isset($fields['shipping']['shipping_phone'])) {
+			$fields['shipping']['shipping_phone']['required'] = true; 
+		}
+
+		// Modify the email field's required property
+		if (isset($fields['billing']['billing_email'])) {
+			$fields['billing']['billing_email']['required'] = false; // Set to false to make it optional
+		}
+
+		// Modify the email field's required property
+		if (isset($fields['billing']['shipping_email'])) {
+			$fields['billing']['shipping_email']['required'] = false; // Set to false to make it optional
+		}
+
 		return $fields;
 	}
 
@@ -113,32 +132,37 @@ class Checkout {
 	 * @return array City options for select dropdown
 	 */
 	private function get_libyan_cities() {
+
+		$config = include plugin_dir_path(__DIR__) . 'config.php';
+
 		$cities = array(
 			'' => __( 'Select your city', 'darb-assabil' )
 		);
 
-		$branches_url = 'https://v2-staging.sabil.ly/api/local/branches/public';
-		$bearer_token = get_option('darb_assabil_bearer_token', 'eyJhbGciOiJIUzI1NiJ9.eyJ2ZXJzaW9uIjoxLCJzZXNzaW9uSWQiOiI2ODBhMGEwMjY4N2I2ZThmNGZhNjRlYjEiLCJyZWZyZXNoYWJsZSI6ZmFsc2UsInVubGltaXRlZCI6ZmFsc2UsInN1YiI6Im9hdXRoX2FjY2Vzc190b2tlbiIsImlzcyI6IkRhcmIgQXNzYWJpbCIsImF1ZCI6IkRhcmIgQXNzYWJpbCIsImlhdCI6MTc0NTQ4ODM4NiwiZXhwIjoxNzUyNzQ1OTg2Ljg0fQ.HMBmtiEYInuM9SqfhZJUxtbMHDlKYbFEfbE1vofwtnc');
+		$branches_url = $config['middleware_server_base_url'] . '/api/darb/assabil/order/branch/list';
+		$access_token = get_option('darb_assabil_access_token', '');
 		$args = array(
 			'timeout' => 30,
 			'sslverify' => false,
 			'headers' => array(
-				'Accept' => 'application/json',
-				'Authorization' => 'Bearer ' . $bearer_token
-			)
+				'Accept' => 'application/json'
+			),
+			'body' => wp_json_encode(
+				array('token' => $access_token)
+			),
 		);
-		$response = wp_remote_get($branches_url, $args);
+		$response = wp_remote_post($branches_url, $args);
 		if (!is_wp_error($response)) {
 			$body = wp_remote_retrieve_body($response);
 			$data = json_decode($body, true);
-			if (!empty($data['data']['results'])) {
-				foreach ($data['data']['results'] as $branch) {
+			if (!empty($data['data'])) {
+				foreach ($data['data'] as $branch) {
 					$city = isset($branch['city']) ? $branch['city'] : '';
 					if (!empty($city) && !empty($branch['areas']) && is_array($branch['areas'])) {
 						foreach ($branch['areas'] as $area) {
-							if (!empty($area['area'])) {
-								$label = $city . ' - ' . $area['area'];
-								$value = $area['area'];
+							if (!empty($area)) {
+								$label = $city . ' - ' . $area;
+								$value = $city . '::' . $area;
 								$cities[$value] = $label;
 							}
 						}
@@ -149,5 +173,58 @@ class Checkout {
 		asort($cities);
 		return $cities;
 	}
+
+	/**
+	 * Log messages for debugging
+	 *
+	 * @param string $message The message to log.
+	 */
+	private function log($message) {
+		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
+		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
+		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
+
+		// Write the log message to the file
+		file_put_contents($log_file, $formatted_message, FILE_APPEND);
+	}
+
+	function update_shipping_rate() {
+		if (!isset($_POST['city'])) {
+			wp_send_json_error('City or area not provided');
+		}
+		$city = sanitize_text_field($_POST['city']);
+		
+		// Use a standalone logging function
+		// $this->log('City: ' . $city);
+	
+		// Optionally, store the city in the session for later use
+		WC()->session->set('selected_city', $city);
+
+		// $this->log(print_r(WC()->cart));
+	
+		// Trigger WooCommerce to recalculate shipping rates
+
+		// ShippingMethod::get_instance()->calculate_shipping();
+		// WC()->cart->calculate_shipping();
+		// WC()->cart->calculate_totals();
+	
+		wp_send_json_success('Shipping rate updated');
+	}
 }
 
+add_action('wp_enqueue_scripts', function () {
+    if (is_checkout()) {
+        wp_enqueue_script(
+            'darb-assabil-checkout',
+            plugin_dir_url(__FILE__) . '../assets/js/checkout.js',
+            ['jquery'],
+            '1.0',
+            true
+        );
+        wp_localize_script('darb-assabil-checkout', 'darbAssabilAjax', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+        ]);
+    }
+});
+add_action('wp_ajax_update_shipping_rate', [Checkout::get_instance(), 'update_shipping_rate']);
+add_action('wp_ajax_nopriv_update_shipping_rate', [Checkout::get_instance(), 'update_shipping_rate']);

@@ -71,78 +71,91 @@ class AdminSettings {
 	 * Register settings for the plugin
 	 */
 	public function register_settings() {
-		register_setting( 
-			$this->option_group, 
-			$this->option_name,
-			array( $this, 'sanitize_options' )
-		);
+	    // Register individual options
+	    register_setting('darb_assabil_options', 'darb_assabil_bearer_token');
+	    register_setting('darb_assabil_options', 'darb_assabil_service_id');
+	    // register_setting('darb_assabil_options', 'darb_assabil_debug_mode', array(
+	    //     'type' => 'boolean',
+	    //     'sanitize_callback' => 'rest_sanitize_boolean',
+	    //     'default' => false,
+	    // ));
+	    register_setting('darb_assabil_options', 'darb_assabil_use_city_dropdown', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true,
+	    ));
+	    register_setting('darb_assabil_options', 'darb_assabil_payment_done_by_receiver', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true, // Set default value to true
+	    ));
+	    register_setting('darb_assabil_options', 'darb_assabil_include_product_payment', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true, // Set default value to true
+	    ));
 
-		// Register individual options
-		register_setting('darb_assabil_options', 'darb_assabil_bearer_token');
-		register_setting('darb_assabil_options', 'darb_assabil_service_id'); // Ensure this is registered
-		register_setting('darb_assabil_options', 'darb_assabil_integration_option');
+	    add_settings_section(
+	        'darb_assabil_general',
+	        __( 'General Settings', 'darb-assabil' ),
+	        array( $this, 'render_section' ),
+	        'darb-assabil-settings'
+	    );
 
-		add_settings_section(
-			'darb_assabil_general',
-			__( 'General Settings', 'darb-assabil' ),
-			array( $this, 'render_section' ),
-			'darb-assabil-settings'
-		);
+	    // add_settings_field(
+	    //     'debug_mode',
+	    //     __( 'Debug Mode', 'darb-assabil' ),
+	    //     array( $this, 'render_debug_mode_field' ),
+	    //     'darb-assabil-settings',
+	    //     'darb_assabil_general'
+	    // );
 
-		add_settings_field(
-			'api_endpoint',
-			__( 'API Endpoint', 'darb-assabil' ),
-			array( $this, 'render_api_endpoint_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    add_settings_field(
+	        'use_city_dropdown',
+	        __( 'City Field Type', 'darb-assabil' ),
+	        array( $this, 'render_city_dropdown_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'api_token',
-			__( 'API Token', 'darb-assabil' ),
-			array( $this, 'render_api_token_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    add_settings_field(
+	        'payment_done_by_receiver',
+	        __( 'Payment Done by Receiver', 'darb-assabil' ),
+	        array( $this, 'render_payment_done_by_receiver_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'debug_mode',
-			__( 'Debug Mode', 'darb-assabil' ),
-			array( $this, 'render_debug_mode_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
-		
-		add_settings_field(
-			'use_city_dropdown',
-			__( 'City Field Type', 'darb-assabil' ),
-			array( $this, 'render_city_dropdown_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
-		
-		add_settings_section(
-			'darb_assabil_api_section',
-			__('API Settings', 'darb-assabil'),
-			array($this, 'api_section_callback'),
-			'darb-assabil-settings'
-		);
+	    add_settings_field(
+	        'include_product_payment',
+	        __( 'Include Product Payment', 'darb-assabil' ),
+	        array( $this, 'render_include_product_payment_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'darb_assabil_bearer_token',
-			__('Bearer Token', 'darb-assabil'),
-			array($this, 'bearer_token_callback'),
-			'darb-assabil-settings',
-			'darb_assabil_api_section'
-		);
+	    add_settings_section(
+	        'darb_assabil_api_section',
+	        __('API Settings', 'darb-assabil'),
+	        array($this, 'api_section_callback'),
+	        'darb-assabil-settings'
+	    );
 
-		add_settings_field(
-			'darb_assabil_service_id',
-			__('Default Service', 'darb-assabil'),
-			array($this, 'service_dropdown_callback'),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    add_settings_field(
+	        'darb_assabil_bearer_token',
+	        __('Bearer Token', 'darb-assabil'),
+	        array($this, 'bearer_token_callback'),
+	        'darb-assabil-settings',
+	        'darb_assabil_api_section'
+	    );
+
+	    add_settings_field(
+	        'darb_assabil_service_id',
+	        __('Default Service', 'darb-assabil'),
+	        array($this, 'service_dropdown_callback'),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 	}
 
 	/**
@@ -207,7 +220,7 @@ class AdminSettings {
 	    }
 
 	    // API endpoint
-	    $api_url = $config['middleware_server_base_url'] . '/api/darb/assabil/auth/GetLoginUrl';
+	    $api_url = $config['middleware_server_base_url'] . '/api/darb/assabil/auth/login';
 
 	    // Initialize variables
 	    $login_url = '';
@@ -250,7 +263,7 @@ class AdminSettings {
 	    <?php endif; ?>
 
 	    <?php if (!empty($login_url)) : ?>
-	        <a href="<?php echo $login_url; ?>" class="button button-primary" target="_blank">
+	        <a href="<?php echo $login_url; ?>" class="button button-primary">
 	            <?php esc_html_e('Login in Darb Assabil', 'darb-assabil'); ?>
 	        </a>
 	    <?php endif; ?>
@@ -298,36 +311,68 @@ class AdminSettings {
 	 * Render the debug mode field
 	 */
 	public function render_debug_mode_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['debug_mode'] ) ? $options['debug_mode'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-				   name="<?php echo esc_attr( $this->option_name ); ?>[debug_mode]" 
-				   value="1" 
-				   <?php checked( $value, true ); ?>>
-			<?php esc_html_e( 'Enable debug logging', 'darb-assabil' ); ?>
-		</label>
-		<p class="description"><?php esc_html_e( 'When enabled, debug information will be logged to the WordPress debug log.', 'darb-assabil' ); ?></p>
-		<?php
+	    $value = get_option('darb_assabil_debug_mode', false);
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_debug_mode" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable debug logging', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, debug information will be logged to the WordPress debug log.', 'darb-assabil'); ?></p>
+	    <?php
 	}
 
 	/**
 	 * Render the city dropdown toggle field
 	 */
 	public function render_city_dropdown_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['use_city_dropdown'] ) ? $options['use_city_dropdown'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-				   name="<?php echo esc_attr( $this->option_name ); ?>[use_city_dropdown]" 
-				   value="1" 
-				   <?php checked( $value, true ); ?>>
-			<?php esc_html_e( 'Use dropdown for city fields', 'darb-assabil' ); ?>
-		</label>
-		<p class="description"><?php esc_html_e( 'When enabled, city fields will use a dropdown with Libyan cities provided by Darb Assabil. When disabled, standard text input will be used.', 'darb-assabil' ); ?></p>
-		<?php
+	    $value = get_option('darb_assabil_use_city_dropdown', true);
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_use_city_dropdown" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Use dropdown for city fields', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, city fields will use a dropdown with Libyan cities provided by Darb Assabil. When disabled, standard text input will be used.', 'darb-assabil'); ?></p>
+	    <?php
+	}
+
+	/**
+	 * Render the "Payment Done by Receiver" field
+	 */
+	public function render_payment_done_by_receiver_field() {
+	    $value = get_option('darb_assabil_payment_done_by_receiver', true); // Default to true
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_payment_done_by_receiver" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable payment done by receiver', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, the payment will be handled by the receiver.', 'darb-assabil'); ?></p>
+	    <?php
+	}
+
+	/**
+	 * Render the "Include Product Payment" field
+	 */
+	public function render_include_product_payment_field() {
+	    $value = get_option('darb_assabil_include_product_payment', true); // Default to true
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_include_product_payment" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable inclusion of product payment', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, the product payment will be included in the order.', 'darb-assabil'); ?></p>
+	    <?php
 	}
 
 	/**
@@ -353,14 +398,16 @@ class AdminSettings {
 		$selected_service = get_option('darb_assabil_service_id', '');
 		$this->log('Selected service ID: ' . $selected_service);
 		$services = $this->get_services();
+
+		$this->log('Available services: ' . print_r($services, true));
 		
 		echo '<select name="darb_assabil_service_id" id="darb_assabil_service_id">';
 		echo '<option value="">' . __('Select a service', 'darb-assabil') . '</option>';
 		
 		foreach ($services as $service) {
-			$selected = selected($selected_service, $service['_id'], false);
-			echo '<option value="' . esc_attr($service['_id']) . '" ' . $selected . '>';
-			echo esc_html($service['title'] . ' (' . $service['amount'] . ' LYD)');
+			$selected = selected($selected_service, $service['id'], false);
+			echo '<option value="' . esc_attr($service['id']) . '" ' . $selected . '>';
+			echo esc_html($service['service']);
 			echo '</option>';
 		}
 		
@@ -375,20 +422,28 @@ class AdminSettings {
 	    // Include the configuration file
 	    $config = include plugin_dir_path(__DIR__) . 'config.php';
 
-	    $bearer_token = get_option('darb_assabil_bearer_token', '');
-	    $api_url = $config['darb_assabil_api_base_url'] . '/api/local/service/rates/public/';
+	    $access_token = get_option('darb_assabil_access_token', '');
+		$this->log('Access token: ' . $access_token);
+
+		if (empty($access_token)) {
+	        return array();
+	    }
+
+	    $api_url = $config['middleware_server_base_url'] . '/api/darb/assabil/order/service/list';
 
 	    $args = array(
 	        'timeout' => 30,
 	        'sslverify' => false,
 	        'headers' => array(
-	            'Accept' => 'application/json',
-	            'Authorization' => 'Bearer ' . $bearer_token
-	        )
+	            'Accept' => 'application/json'
+			),
+			'body' => wp_json_encode(
+				array('token' => $access_token)
+			),
 	    );
 
-	    $response = wp_remote_get($api_url, $args);
-
+		$response = wp_remote_post($api_url, $args);
+		$this->log('API response: ' . print_r($response, true));
 	    if (is_wp_error($response)) {
 	        error_log('Darb Assabil API Error: ' . $response->get_error_message());
 	        return array();
@@ -399,8 +454,8 @@ class AdminSettings {
 
 	    $this->log('API Response: ' . print_r($data, true));
 
-	    if (!empty($data['data']['results'])) {
-	        return $data['data']['results'];
+	    if (!empty($data['data'])) {
+	        return $data['data'];
 	    }
 
 	    return array();
@@ -413,21 +468,21 @@ class AdminSettings {
 	 * @return array Sanitized options
 	 */
 	public function sanitize_options( $input ) {
-		$output = get_option( $this->option_name, array() );
-		
-		if ( isset( $input['api_endpoint'] ) ) {
-			$output['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
-		}
-		
-		if ( isset( $input['api_token'] ) ) {
-			$output['api_token'] = sanitize_text_field( $input['api_token'] );
-		}
-		
-		// Checkboxes need special handling since they don't send a value when unchecked
-		$output['debug_mode'] = isset( $input['debug_mode'] ) ? true : false;
-		$output['use_city_dropdown'] = isset( $input['use_city_dropdown'] ) ? true : false;
-		
-		return $output;
+	    $output = get_option( $this->option_name, array() );
+
+	    if ( isset( $input['api_endpoint'] ) ) {
+	        $output['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
+	    }
+
+	    if ( isset( $input['api_token'] ) ) {
+	        $output['api_token'] = sanitize_text_field( $input['api_token'] );
+	    }
+
+	    // Handle checkboxes explicitly
+	    $output['debug_mode'] = isset( $input['debug_mode'] ) ? true : false;
+	    $output['use_city_dropdown'] = isset( $input['use_city_dropdown'] ) ? true : false;
+
+	    return $output;
 	}
 
 	/**
