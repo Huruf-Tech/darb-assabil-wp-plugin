@@ -29,6 +29,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once plugin_dir_path(__FILE__) . 'src/Helpers.php';
+
 /**
  * Check if WooCommerce is active
  * 
@@ -78,7 +80,7 @@ spl_autoload_register( function ( $class ) {
 /**
  * Initialize the plugin when WordPress is loaded
  */
-add_action( 'plugins_loaded', function() {
+add_action('plugins_loaded', function() {
 	if ( darb_assabil_check_woocommerce() ) {
 		DarbAssabil\Checkout::get_instance();
 		DarbAssabil\OrderHandler::get_instance();

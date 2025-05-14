@@ -7,6 +7,9 @@
 
 namespace DarbAssabil;
 
+use DarbAssabil\get_config;
+use DarbAssabil\extract_city_and_area;
+
 /**
  * Class to handle WooCommerce order processing
  */
@@ -90,28 +93,16 @@ class OrderHandler {
 	 * @return array    Prepared order data
 	 */
 	private function prepare_order_data( $order ) {
-		$service_id = get_option('darb_assabil_service_id', '');
-		$value = get_option('darb_assabil_payment_done_by_receiver', '');
-		$payment_by_receiver = $value === true ? 'receiver' : 'sender';
-		$include_product_payment = get_option('darb_assabil_include_product_payment', '');
-		$access_token = get_option('darb_assabil_access_token', '');
+		$include_product_payment = get_plugin_option()['include_product_payment'];
 
-		$this->log("Service ID: {$service_id}");
-		$this->log("Payment by receiver: {$payment_by_receiver}");
-		$this->log("Include product payment: {$include_product_payment}");
-		$this->log("Access token: {$access_token}");
+		$city_area = extract_city_and_area($order->get_billing_city());
 
-		$city_full = $order->get_billing_city() ?? '';
-			$city_parts = explode('::', $city_full);
-			$city = $city_parts[0] ?? ''; // Extract the city
-			$area = $city_parts[1] ?? ''; // Extract the area
-
-			$this->log('City: ' . $city);
-			$this->log('Area: ' . $area);
+		$this->log('City: ' . $city);
+		$this->log('Area: ' . $area);
 
 		return array(
 			'order' => array(
-				'service'       => $service_id,
+				'service'       => get_plugin_option()['service'],
 				'notes'         => $order->get_customer_note(),
 				'contacts' => array(
 					array(
@@ -137,31 +128,19 @@ class OrderHandler {
 					}
 					return $products;
 				})(),
-				// 'allowSplitting' => false,
-				'paymentBy'    => $payment_by_receiver,
+				'paymentBy'    => get_plugin_option()['payment_done_by_receiver'] === true ? 'receiver' : 'sender',
 				'to' => array(
 					'countryCode'   => 'lby',
-					'city'      => $city,
-					'area'      => $area,
+					'city'      => $city_area['city'],
+					'area'      => $city_area['area'],
 					'address'  => $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2(),
 				),
-				// 'isPickup' => false,
-				// 'allowCardPayment' => false,
-				// 'cardFeePaymentBy' => 'receiver',
-				// 'suggestedDeliveryTime' => array(
-				// 	'fromHour' => '08:00',
-				// 	'fromMinute' => '00',
-				// 	'toHour' => '17:00',
-				// 	'toMinute' => '00',
-				// ),
-				// 'tags' => array(
-				// ),
 				'metadata' => array(
 					'order_id' => (string) $order->get_id(),
 					'customer_id' => (string) $order->get_customer_id(),
 				),
 			),
-			'token' => $access_token,
+			'token' => get_access_token(),
 		);
 	}
 
@@ -172,13 +151,7 @@ class OrderHandler {
 	 * @throws \Exception If API request fails.
 	 */
 	private function create_order( $order_data ) {
-
-		$config = include plugin_dir_path(__FILE__) . '../config.php';
-		$api_url = $config['middleware_server_base_url'] . '/api/darb/assabil/order/create';
-
-		// // Get API settings
-		// $options = get_option('darb_assabil_options', array());
-		// $api_endpoint = isset($options['api_endpoint']) ? $options['api_endpoint'] : '';
+		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/create';
 		
 		$this->log("API Settings - Endpoint: {$api_url}");
 		

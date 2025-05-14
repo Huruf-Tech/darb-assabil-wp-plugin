@@ -7,6 +7,8 @@
 
 namespace DarbAssabil;
 
+use DarbAssabil\get_config;
+
 /**
  * Checkout class for customizing WooCommerce checkout fields
  */
@@ -132,15 +134,11 @@ class Checkout {
 	 * @return array City options for select dropdown
 	 */
 	private function get_libyan_cities() {
-
-		$config = include plugin_dir_path(__DIR__) . 'config.php';
-
 		$cities = array(
 			'' => __( 'Select your city', 'darb-assabil' )
 		);
 
-		$branches_url = $config['middleware_server_base_url'] . '/api/darb/assabil/order/branch/list';
-		$access_token = get_option('darb_assabil_access_token', '');
+		$branches_url = get_config('server_base_url') . '/api/darb/assabil/order/branch/list';
 		$args = array(
 			'timeout' => 30,
 			'sslverify' => false,
@@ -148,7 +146,7 @@ class Checkout {
 				'Accept' => 'application/json'
 			),
 			'body' => wp_json_encode(
-				array('token' => $access_token)
+				array('token' => get_access_token())
 			),
 		);
 		$response = wp_remote_post($branches_url, $args);
