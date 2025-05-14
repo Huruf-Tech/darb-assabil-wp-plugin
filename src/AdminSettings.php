@@ -7,6 +7,9 @@
 
 namespace DarbAssabil;
 
+use DarbAssabil\get_config;
+use Exception;
+
 /**
  * Class to handle admin settings for the plugin
  */
@@ -51,6 +54,8 @@ class AdminSettings {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action('admin_init', array($this, 'check_and_save_token')); // Hook to check and save the token
+		add_action('init', array($this, 'register_webhook_endpoint'));
+		add_action('parse_request', array($this, 'handle_webhook_request'));
 	}
 
 	/**
@@ -71,78 +76,98 @@ class AdminSettings {
 	 * Register settings for the plugin
 	 */
 	public function register_settings() {
-		register_setting( 
-			$this->option_group, 
-			$this->option_name,
-			array( $this, 'sanitize_options' )
-		);
+	    // Register individual options
+	    // register_setting('darb_assabil_options', 'darb_assabil_bearer_token');
+	    register_setting('darb_assabil_options', 'darb_assabil_service_id');
+	    // register_setting('darb_assabil_options', 'darb_assabil_debug_mode', array(
+	    //     'type' => 'boolean',
+	    //     'sanitize_callback' => 'rest_sanitize_boolean',
+	    //     'default' => false,
+	    // ));
+	    register_setting('darb_assabil_options', 'darb_assabil_use_city_dropdown', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true,
+	    ));
+	    register_setting('darb_assabil_options', 'darb_assabil_payment_done_by_receiver', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true, // Set default value to true
+	    ));
+	    register_setting('darb_assabil_options', 'darb_assabil_include_product_payment', array(
+	        'type' => 'boolean',
+	        'sanitize_callback' => 'rest_sanitize_boolean',
+	        'default' => true, // Set default value to true
+	    ));
 
-		// Register individual options
-		register_setting('darb_assabil_options', 'darb_assabil_bearer_token');
-		register_setting('darb_assabil_options', 'darb_assabil_service_id'); // Ensure this is registered
-		register_setting('darb_assabil_options', 'darb_assabil_integration_option');
+	    add_settings_section(
+	        'darb_assabil_general',
+	        __( 'General Settings', 'darb-assabil' ),
+	        array( $this, 'render_section' ),
+	        'darb-assabil-settings'
+	    );
 
-		add_settings_section(
-			'darb_assabil_general',
-			__( 'General Settings', 'darb-assabil' ),
-			array( $this, 'render_section' ),
-			'darb-assabil-settings'
-		);
+	    // add_settings_field(
+	    //     'debug_mode',
+	    //     __( 'Debug Mode', 'darb-assabil' ),
+	    //     array( $this, 'render_debug_mode_field' ),
+	    //     'darb-assabil-settings',
+	    //     'darb_assabil_general'
+	    // );
 
-		add_settings_field(
-			'api_endpoint',
-			__( 'API Endpoint', 'darb-assabil' ),
-			array( $this, 'render_api_endpoint_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    add_settings_field(
+	        'use_city_dropdown',
+	        __( 'City Field Type', 'darb-assabil' ),
+	        array( $this, 'render_city_dropdown_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'api_token',
-			__( 'API Token', 'darb-assabil' ),
-			array( $this, 'render_api_token_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    add_settings_field(
+	        'payment_done_by_receiver',
+	        __( 'Payment Done by Receiver', 'darb-assabil' ),
+	        array( $this, 'render_payment_done_by_receiver_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'debug_mode',
-			__( 'Debug Mode', 'darb-assabil' ),
-			array( $this, 'render_debug_mode_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
-		
-		add_settings_field(
-			'use_city_dropdown',
-			__( 'City Field Type', 'darb-assabil' ),
-			array( $this, 'render_city_dropdown_field' ),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
-		
-		add_settings_section(
-			'darb_assabil_api_section',
-			__('API Settings', 'darb-assabil'),
-			array($this, 'api_section_callback'),
-			'darb-assabil-settings'
-		);
+	    add_settings_field(
+	        'include_product_payment',
+	        __( 'Include Product Payment', 'darb-assabil' ),
+	        array( $this, 'render_include_product_payment_field' ),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
 
-		add_settings_field(
-			'darb_assabil_bearer_token',
-			__('Bearer Token', 'darb-assabil'),
-			array($this, 'bearer_token_callback'),
-			'darb-assabil-settings',
-			'darb_assabil_api_section'
-		);
+	    // add_settings_section(
+	    //     'darb_assabil_api_section',
+	    //     __('API Settings', 'darb-assabil'),
+	    //     array($this, 'api_section_callback'),
+	    //     'darb-assabil-settings'
+	    // );
 
-		add_settings_field(
-			'darb_assabil_service_id',
-			__('Default Service', 'darb-assabil'),
-			array($this, 'service_dropdown_callback'),
-			'darb-assabil-settings',
-			'darb_assabil_general'
-		);
+	    // add_settings_field(
+	    //     'darb_assabil_bearer_token',
+	    //     __('Bearer Token', 'darb-assabil'),
+	    //     array($this, 'bearer_token_callback'),
+	    //     'darb-assabil-settings',
+	    //     'darb_assabil_api_section'
+	    // );
+
+	    add_settings_field(
+	        'darb_assabil_service_id',
+	        __('Default Service', 'darb-assabil'),
+	        array($this, 'service_dropdown_callback'),
+	        'darb-assabil-settings',
+	        'darb_assabil_general'
+	    );
+
+	    // Register webhook related options without adding fields
+	    register_setting('darb_assabil_options', 'darb_assabil_webhook_secret', array(
+	        'type' => 'string',
+	        'sanitize_callback' => 'sanitize_text_field',
+	        'default' => wp_generate_password(32, false),
+	    ));
 	}
 
 	/**
@@ -163,20 +188,27 @@ class AdminSettings {
 				<a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e('Integration', 'darb-assabil'); ?>
 				</a>
+				<a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e('Webhooks', 'darb-assabil'); ?>
+				</a>
 			</h2>
 
 			<!-- Tab Content -->
-			<form action="options.php" method="post">
-				<?php
-				if ($current_tab === 'settings') {
-					settings_fields('darb_assabil_options');
-					do_settings_sections('darb-assabil-settings');
-					submit_button();
-				} elseif ($current_tab === 'integration') { // Ensure lowercase 'integration'
-					$this->render_integrate_tab();
-				}
-				?>
-			</form>
+			<?php if ($current_tab === 'webhooks'): ?>
+				<?php $this->render_webhook_tab(); ?>
+			<?php else: ?>
+				<form action="options.php" method="post">
+					<?php
+					if ($current_tab === 'settings') {
+						settings_fields('darb_assabil_options');
+						do_settings_sections('darb-assabil-settings');
+						submit_button();
+					} elseif ($current_tab === 'integration') { // Ensure lowercase 'integration'
+						$this->render_integrate_tab();
+					}
+					?>
+				</form>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -189,10 +221,10 @@ class AdminSettings {
 	    $config = include plugin_dir_path(__DIR__) . 'config.php';
 
 	    // Retrieve the saved token
-	    $saved_token = get_option('darb_assabil_access_token', '');
+	    $access_token = get_access_token();
 
 	    // If the token exists, skip the API call and show the logout button
-	    if (!empty($saved_token)) {
+	    if (!empty($access_token)) {
 	        ?>
 	        <h2><?php esc_html_e('Integration Settings', 'darb-assabil'); ?></h2>
 	        <p><?php esc_html_e('You are already logged in to Darb Assabil.', 'darb-assabil'); ?></p>
@@ -207,7 +239,7 @@ class AdminSettings {
 	    }
 
 	    // API endpoint
-	    $api_url = $config['middleware_server_base_url'] . '/api/darb/assabil/auth/GetLoginUrl';
+	    $api_url = get_config('server_base_url') . '/api/darb/assabil/auth/login';
 
 	    // Initialize variables
 	    $login_url = '';
@@ -250,7 +282,7 @@ class AdminSettings {
 	    <?php endif; ?>
 
 	    <?php if (!empty($login_url)) : ?>
-	        <a href="<?php echo $login_url; ?>" class="button button-primary" target="_blank">
+	        <a href="<?php echo $login_url; ?>" class="button button-primary">
 	            <?php esc_html_e('Login in Darb Assabil', 'darb-assabil'); ?>
 	        </a>
 	    <?php endif; ?>
@@ -265,86 +297,88 @@ class AdminSettings {
 	}
 
 	/**
-	 * Render the API endpoint field
-	 */
-	public function render_api_endpoint_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['api_endpoint'] ) ? $options['api_endpoint'] : 'http://localhost:3005/store-data';
-		?>
-		<input type="url" 
-			   name="<?php echo esc_attr( $this->option_name ); ?>[api_endpoint]" 
-			   value="<?php echo esc_url( $value ); ?>" 
-			   class="regular-text">
-		<p class="description"><?php esc_html_e( 'Enter the API endpoint URL for order processing.', 'darb-assabil' ); ?></p>
-		<?php
-	}
-
-	/**
-	 * Render the API token field
-	 */
-	public function render_api_token_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['api_token'] ) ? $options['api_token'] : '';
-		?>
-		<input type="password" 
-			   name="<?php echo esc_attr( $this->option_name ); ?>[api_token]" 
-			   value="<?php echo esc_attr( $value ); ?>" 
-			   class="regular-text">
-		<p class="description"><?php esc_html_e( 'Enter your API authentication token.', 'darb-assabil' ); ?></p>
-		<?php
-	}
-
-	/**
 	 * Render the debug mode field
 	 */
 	public function render_debug_mode_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['debug_mode'] ) ? $options['debug_mode'] : false;
-		?>
-		<label>
-			<input type="checkbox" 
-				   name="<?php echo esc_attr( $this->option_name ); ?>[debug_mode]" 
-				   value="1" 
-				   <?php checked( $value, true ); ?>>
-			<?php esc_html_e( 'Enable debug logging', 'darb-assabil' ); ?>
-		</label>
-		<p class="description"><?php esc_html_e( 'When enabled, debug information will be logged to the WordPress debug log.', 'darb-assabil' ); ?></p>
-		<?php
+	    $value = get_option('darb_assabil_debug_mode', false);
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_debug_mode" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable debug logging', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, debug information will be logged to the WordPress debug log.', 'darb-assabil'); ?></p>
+	    <?php
 	}
 
 	/**
 	 * Render the city dropdown toggle field
 	 */
 	public function render_city_dropdown_field() {
-		$options = get_option( $this->option_name );
-		$value = isset( $options['use_city_dropdown'] ) ? $options['use_city_dropdown'] : true;
-		?>
-		<label>
-			<input type="checkbox" 
-				   name="<?php echo esc_attr( $this->option_name ); ?>[use_city_dropdown]" 
-				   value="1" 
-				   <?php checked( $value, true ); ?>>
-			<?php esc_html_e( 'Use dropdown for city fields', 'darb-assabil' ); ?>
-		</label>
-		<p class="description"><?php esc_html_e( 'When enabled, city fields will use a dropdown with Libyan cities provided by Darb Assabil. When disabled, standard text input will be used.', 'darb-assabil' ); ?></p>
-		<?php
+	    $value = get_option('darb_assabil_use_city_dropdown', true);
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_use_city_dropdown" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Use dropdown for city fields', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, city fields will use a dropdown with Libyan cities provided by Darb Assabil. When disabled, standard text input will be used.', 'darb-assabil'); ?></p>
+	    <?php
 	}
 
 	/**
-	 * Section callback
+	 * Render the "Payment Done by Receiver" field
 	 */
-	public function api_section_callback() {
-		echo '<p>' . __('Configure your Darb Assabil API settings.', 'darb-assabil') . '</p>';
+	public function render_payment_done_by_receiver_field() {
+	    $value = get_option('darb_assabil_payment_done_by_receiver', true); // Default to true
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_payment_done_by_receiver" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable payment done by receiver', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, the payment will be handled by the receiver.', 'darb-assabil'); ?></p>
+	    <?php
 	}
 
 	/**
-	 * Bearer token field callback
+	 * Render the "Include Product Payment" field
 	 */
-	public function bearer_token_callback() {
-		$token = get_option('darb_assabil_bearer_token');
-		echo '<input type="text" name="darb_assabil_bearer_token" value="' . esc_attr($token) . '" class="regular-text" />';
-		echo '<p class="description">' . __('Enter your API bearer token for authentication.', 'darb-assabil') . '</p>';
+	public function render_include_product_payment_field() {
+	    $value = get_option('darb_assabil_include_product_payment', true); // Default to true
+	    ?>
+	    <label>
+	        <input type="checkbox" 
+	               name="darb_assabil_include_product_payment" 
+	               value="1" 
+	               <?php checked($value, true); ?>>
+	        <?php esc_html_e('Enable inclusion of product payment', 'darb-assabil'); ?>
+	    </label>
+	    <p class="description"><?php esc_html_e('When enabled, the product payment will be included in the order.', 'darb-assabil'); ?></p>
+	    <?php
 	}
+
+	// /**
+	//  * Section callback
+	//  */
+	// public function api_section_callback() {
+	// 	echo '<p>' . __('Configure your Darb Assabil API settings.', 'darb-assabil') . '</p>';
+	// }
+
+	// /**
+	//  * Bearer token field callback
+	//  */
+	// public function bearer_token_callback() {
+	// 	$token = get_option('darb_assabil_bearer_token');
+	// 	echo '<input type="text" name="darb_assabil_bearer_token" value="' . esc_attr($token) . '" class="regular-text" />';
+	// 	echo '<p class="description">' . __('Enter your API bearer token for authentication.', 'darb-assabil') . '</p>';
+	// }
 
 	/**
 	 * Service dropdown callback
@@ -353,14 +387,16 @@ class AdminSettings {
 		$selected_service = get_option('darb_assabil_service_id', '');
 		$this->log('Selected service ID: ' . $selected_service);
 		$services = $this->get_services();
+
+		$this->log('Available services: ' . print_r($services, true));
 		
 		echo '<select name="darb_assabil_service_id" id="darb_assabil_service_id">';
 		echo '<option value="">' . __('Select a service', 'darb-assabil') . '</option>';
 		
 		foreach ($services as $service) {
-			$selected = selected($selected_service, $service['_id'], false);
-			echo '<option value="' . esc_attr($service['_id']) . '" ' . $selected . '>';
-			echo esc_html($service['title'] . ' (' . $service['amount'] . ' LYD)');
+			$selected = selected($selected_service, $service['id'], false);
+			echo '<option value="' . esc_attr($service['id']) . '" ' . $selected . '>';
+			echo esc_html($service['service']);
 			echo '</option>';
 		}
 		
@@ -372,23 +408,21 @@ class AdminSettings {
 	 * Get services
 	 */
 	private function get_services() {
-	    // Include the configuration file
-	    $config = include plugin_dir_path(__DIR__) . 'config.php';
-
-	    $bearer_token = get_option('darb_assabil_bearer_token', '');
-	    $api_url = $config['darb_assabil_api_base_url'] . '/api/local/service/rates/public/';
+		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/service/list';
 
 	    $args = array(
 	        'timeout' => 30,
 	        'sslverify' => false,
 	        'headers' => array(
-	            'Accept' => 'application/json',
-	            'Authorization' => 'Bearer ' . $bearer_token
-	        )
+	            'Accept' => 'application/json'
+			),
+			'body' => wp_json_encode(
+				array('token' => get_access_token())
+			),
 	    );
 
-	    $response = wp_remote_get($api_url, $args);
-
+		$response = wp_remote_post($api_url, $args);
+		$this->log('API response: ' . print_r($response, true));
 	    if (is_wp_error($response)) {
 	        error_log('Darb Assabil API Error: ' . $response->get_error_message());
 	        return array();
@@ -399,8 +433,8 @@ class AdminSettings {
 
 	    $this->log('API Response: ' . print_r($data, true));
 
-	    if (!empty($data['data']['results'])) {
-	        return $data['data']['results'];
+	    if (!empty($data['data'])) {
+	        return $data['data'];
 	    }
 
 	    return array();
@@ -413,21 +447,21 @@ class AdminSettings {
 	 * @return array Sanitized options
 	 */
 	public function sanitize_options( $input ) {
-		$output = get_option( $this->option_name, array() );
-		
-		if ( isset( $input['api_endpoint'] ) ) {
-			$output['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
-		}
-		
-		if ( isset( $input['api_token'] ) ) {
-			$output['api_token'] = sanitize_text_field( $input['api_token'] );
-		}
-		
-		// Checkboxes need special handling since they don't send a value when unchecked
-		$output['debug_mode'] = isset( $input['debug_mode'] ) ? true : false;
-		$output['use_city_dropdown'] = isset( $input['use_city_dropdown'] ) ? true : false;
-		
-		return $output;
+	    $output = get_option( $this->option_name, array() );
+
+	    if ( isset( $input['api_endpoint'] ) ) {
+	        $output['api_endpoint'] = esc_url_raw( $input['api_endpoint'] );
+	    }
+
+	    if ( isset( $input['api_token'] ) ) {
+	        $output['api_token'] = sanitize_text_field( $input['api_token'] );
+	    }
+
+	    // Handle checkboxes explicitly
+	    $output['debug_mode'] = isset( $input['debug_mode'] ) ? true : false;
+	    $output['use_city_dropdown'] = isset( $input['use_city_dropdown'] ) ? true : false;
+
+	    return $output;
 	}
 
 	/**
@@ -439,7 +473,7 @@ class AdminSettings {
 	 */
 	public function get_option( $key, $default = '' ) {
 		$options = get_option( $this->option_name );
-		return isset( $options[$key] ) ? $options[$key] : $default;
+		return isset( $options[$key] ) ? $key : $default;
 	}
 	/**
 	 * Log messages for debugging
@@ -476,5 +510,527 @@ class AdminSettings {
 	        $token = sanitize_text_field($_GET['token']); // Sanitize the token
 	        update_option('darb_assabil_access_token', $token); // Save the token in the database
 	    }
+	}
+
+	public function register_webhook_endpoint() {
+		add_rewrite_rule('^darb-assabil-webhook/?$', 'index.php?darb_assabil_webhook=1', 'top');
+		add_rewrite_tag('%darb_assabil_webhook%', '1');
+		
+		// Flush rewrite rules only if they haven't been flushed
+		if (get_option('darb_assabil_flush_rewrite_rules', false) === false) {
+		    flush_rewrite_rules();
+		    update_option('darb_assabil_flush_rewrite_rules', true);
+		}
+	}
+
+	/**
+	 * Handle webhook request with X-Darb-Signature verification
+	 */
+	public function handle_webhook_request($wp) {
+	    if (!isset($wp->query_vars['darb_assabil_webhook'])) {
+	        return;
+	    }
+
+	    // Get payload and headers
+	    $payload = file_get_contents('php://input');
+	    $headers = getallheaders();
+	    $signature = isset($headers['X-Darb-Signature']) ? $headers['X-Darb-Signature'] : '';
+	    
+	    // Verify signature
+	    if (!$this->verify_webhook_signature($payload, $signature)) {
+	        $this->log('Invalid webhook signature');
+	        wp_send_json_error('Invalid signature', 403);
+	        exit;
+	    }
+
+	    // Parse payload
+	    $data = json_decode($payload, true);
+	    if (json_last_error() !== JSON_ERROR_NONE || empty($data['event'])) {
+	        $this->log('Invalid webhook payload: ' . json_last_error_msg());
+	        wp_send_json_error('Invalid payload', 400);
+	        exit;
+	    }
+
+	    // Process webhook event
+	    try {
+	        $result = $this->handle_webhook_event($data['event'], $data);
+	        
+	        // Log successful webhook
+	        $webhook_data = array(
+	            'timestamp' => current_time('mysql'),
+	            'event' => $data['event'],
+	            'data' => $data,
+	            'signature' => $signature,
+	            'headers' => $headers,
+	            'response' => array(
+	                'status' => 'success',
+	                'message' => 'Webhook processed successfully'
+	            )
+	        );
+
+	        $webhook_logs = get_option('darb_assabil_webhook_logs', array());
+	        array_unshift($webhook_logs, $webhook_data);
+	        $webhook_logs = array_slice($webhook_logs, 0, 50);
+	        update_option('darb_assabil_webhook_logs', $webhook_logs);
+
+	        wp_send_json_success([
+	            'message' => 'Webhook processed successfully',
+	            'event' => $data['event']
+	        ]);
+
+	    } catch (Exception $e) {
+	        // Log failed webhook - only log once
+	        $webhook_data = array(
+	            'timestamp' => current_time('mysql'),
+	            'event' => $data['event'],
+	            'data' => $data,
+	            'signature' => $signature,
+	            'headers' => $headers,
+	            'response' => array(
+	                'status' => 'error',
+	                'message' => $e->getMessage()
+	            )
+	        );
+
+	        // Save to webhook logs
+	        $webhook_logs = get_option('darb_assabil_webhook_logs', array());
+	        array_unshift($webhook_logs, $webhook_data);
+	        $webhook_logs = array_slice($webhook_logs, 0, 50);
+	        update_option('darb_assabil_webhook_logs', $webhook_logs);
+
+	        $this->log('Webhook processing error: ' . $e->getMessage());
+	        wp_send_json_error($e->getMessage(), 500);
+	    }
+	    exit;
+	}
+
+	/**
+	 * Handle different webhook event types
+	 */
+	private function handle_webhook_event($event, $data) {
+	    if (empty($data['requestId']) || empty($data['webhookId']) || empty($data['account'])) {
+	        throw new Exception('Invalid webhook data structure');
+	    }
+
+	    $this->log('Processing webhook: ' . $event . ' for request: ' . $data['requestId']);
+
+	    switch ($event) {
+	        case 'localShipments.pending':
+	            return $this->process_shipment_status_change($data, 'pending', 'on-hold');
+	            
+	        case 'localShipments.booked':
+	            return $this->process_shipment_status_change($data, 'booked', 'processing');
+	            
+	        case 'localShipments.processing':
+	            return $this->process_shipment_status_change($data, 'processing', 'processing');
+	            
+	        case 'localShipments.on-branch':
+	            return $this->process_shipment_status_change($data, 'on-branch', 'processing');
+	            
+	        case 'localShipments.completed':
+	            return $this->process_shipment_status_change($data, 'completed', 'completed');
+	            
+	        case 'localShipments.cancelled':
+	            return $this->process_shipment_status_change($data, 'cancelled', 'cancelled');
+	            
+	        case 'localShipments.resent':
+	            return $this->process_shipment_status_change($data, 'resent', 'processing');
+	            
+	        case 'localShipments.delayed':
+	            return $this->process_shipment_status_change($data, 'delayed', 'on-hold');
+	            
+	        case 'localShipments.released':
+	            return $this->process_shipment_status_change($data, 'released', 'processing');
+	            
+	        case 'localShipments.returning':
+	            return $this->process_shipment_status_change($data, 'returning', 'on-hold');
+	            
+	        case 'localShipments.returned':
+	            return $this->process_shipment_status_change($data, 'returned', 'failed');
+	            
+	        default:
+	            $this->log('Unhandled webhook event: ' . $event);
+	            return false;
+	    }
+	}
+
+	/**
+	 * Process shipment status changes
+	 */
+	private function process_shipment_status_change($data, $darb_status, $wc_status) {
+	    $payload = $data['payload'];
+	    
+	    if (empty($payload['orderId'])) {
+	        throw new Exception('Missing order ID in payload');
+	    }
+
+	    $order = wc_get_order($payload['orderId']);
+	    if (!$order) {
+	        throw new Exception('Order not found: ' . $payload['orderId']);
+	    }
+
+	    // Update order status and metadata
+	    $order->update_status(
+	        $wc_status,
+	        sprintf(
+	            __('Darb Assabil shipment status changed to: %s (Request ID: %s)', 'darb-assabil'),
+	            $darb_status,
+	            $data['requestId']
+	        )
+	    );
+
+	    // Store Darb Assabil metadata
+	    $order->update_meta_data('darb_assabil_status', $darb_status);
+	    $order->update_meta_data('darb_assabil_request_id', $data['requestId']);
+	    $order->update_meta_data('darb_assabil_webhook_id', $data['webhookId']);
+	    $order->update_meta_data('darb_assabil_account', $data['account']);
+	    
+	    if (!empty($payload['trackingNumber'])) {
+	        $order->update_meta_data('darb_assabil_tracking_number', $payload['trackingNumber']);
+	    }
+	    
+	    $order->save();
+
+	    do_action('darb_assabil_shipment_status_changed', array(
+	        'order' => $order,
+	        'darb_status' => $darb_status,
+	        'wc_status' => $wc_status,
+	        'request_id' => $data['requestId'],
+	        'webhook_id' => $data['webhookId'],
+	        'account' => $data['account'],
+	        'payload' => $payload
+	    ));
+
+	    return true;
+	}
+
+	/**
+	 * Process new order webhook
+	 */
+	private function process_webhook_order_created($data) {
+	    if (empty($data['order_id'])) {
+	        throw new Exception('Missing order ID');
+	    }
+	    
+	    // Update WooCommerce order status
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->update_status('processing', __('Order created in Darb Assabil', 'darb-assabil'));
+	        $order->update_meta_data('darb_assabil_tracking_id', $data['tracking_id']);
+	        $order->save();
+	    }
+	    
+	    do_action('darb_assabil_webhook_order_created', $data);
+	    $this->log('Order created: ' . $data['order_id']);
+	}
+
+	/**
+	 * Process order update webhook
+	 */
+	private function process_webhook_order_updated($data) {
+	    if (empty($data['order_id'])) {
+	        throw new Exception('Missing order ID');
+	    }
+	    
+	    // Add your order update logic here
+	    $this->log('Processing order update: ' . $data['order_id']);
+	    do_action('darb_assabil_webhook_order_updated', $data);
+	}
+
+	/**
+	 * Process order cancellation webhook
+	 */
+	private function process_webhook_order_cancelled($data) {
+	    if (empty($data['order_id'])) {
+	        throw new Exception('Missing order ID');
+	    }
+	    
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->update_status('cancelled', __('Order cancelled in Darb Assabil', 'darb-assabil'));
+	        $order->save();
+	    }
+	    
+	    do_action('darb_assabil_webhook_order_cancelled', $data);
+	    $this->log('Order cancelled: ' . $data['order_id']);
+	}
+
+	/**
+	 * Process shipment creation webhook
+	 */
+	private function process_webhook_shipment_created($data) {
+	    if (empty($data['shipment_id']) || empty($data['order_id'])) {
+	        throw new Exception('Missing shipment data');
+	    }
+	    
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->update_meta_data('darb_assabil_shipment_id', $data['shipment_id']);
+	        $order->update_status('processing', __('Shipment created in Darb Assabil', 'darb-assabil'));
+	        $order->save();
+	    }
+	    
+	    do_action('darb_assabil_webhook_shipment_created', $data);
+	    $this->log('Shipment created: ' . $data['shipment_id']);
+	}
+
+	/**
+	 * Process shipment status webhook
+	 */
+	private function process_webhook_shipment_status($data) {
+	    if (empty($data['shipment_id']) || empty($data['status'])) {
+	        throw new Exception('Missing shipment data');
+	    }
+	    
+	    // Add your shipment status update logic here
+	    $this->log('Processing shipment status: ' . $data['shipment_id'] . ' - ' . $data['status']);
+	    do_action('darb_assabil_webhook_shipment_status', $data);
+	}
+
+	/**
+	 * Process shipment delivery webhook
+	 */
+	private function process_webhook_shipment_delivered($data) {
+	    if (empty($data['shipment_id']) || empty($data['order_id'])) {
+	        throw new Exception('Missing shipment data');
+	    }
+	    
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->update_status('completed', __('Order delivered by Darb Assabil', 'darb-assabil'));
+	        $order->update_meta_data('darb_assabil_delivered_at', current_time('mysql'));
+	        $order->save();
+	    }
+	    
+	    do_action('darb_assabil_webhook_shipment_delivered', $data);
+	    $this->log('Shipment delivered: ' . $data['shipment_id']);
+	}
+
+	/**
+	 * Process payment received webhook
+	 */
+	private function process_webhook_payment_received($data) {
+	    if (empty($data['order_id']) || empty($data['amount'])) {
+	        throw new Exception('Missing payment data');
+	    }
+	    
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->payment_complete();
+	        $order->add_order_note(
+	            sprintf(
+	                __('Payment of %s received via Darb Assabil', 'darb-assabil'),
+	                wc_price($data['amount'])
+	            )
+	        );
+	    }
+	    
+	    do_action('darb_assabil_webhook_payment_received', $data);
+	    $this->log('Payment received for order: ' . $data['order_id']);
+	}
+
+	/**
+	 * Process payment failed webhook
+	 */
+	private function process_webhook_payment_failed($data) {
+	    if (empty($data['order_id'])) {
+	        throw new Exception('Missing payment data');
+	    }
+	    
+	    $order = wc_get_order($data['order_id']);
+	    if ($order) {
+	        $order->update_status('failed', __('Payment failed in Darb Assabil', 'darb-assabil'));
+	    }
+	    
+	    do_action('darb_assabil_webhook_payment_failed', $data);
+	    $this->log('Payment failed for order: ' . $data['order_id']);
+	}
+
+	/**
+	 * Render webhook tab content
+	 */
+	public function render_webhook_tab() {
+	    $webhook_url = home_url('darb-assabil-webhook');
+	    $webhook_secret = get_option('darb_assabil_webhook_secret');
+	    $webhook_logs = get_option('darb_assabil_webhook_logs', array());
+	    ?>
+	    <div class="webhook-settings wrap">
+	        <h2><?php esc_html_e('Webhook Configuration', 'darb-assabil'); ?></h2>
+	        
+	        <form method="post" action="options.php">
+	            <?php settings_fields('darb_assabil_options'); ?>
+	            
+	            <div class="webhook-config">
+	                <h3><?php esc_html_e('Webhook URL', 'darb-assabil'); ?></h3>
+	                <input type="text" readonly value="<?php echo esc_url($webhook_url); ?>" 
+	                       class="regular-text" onclick="this.select()">
+	                
+	                <h3><?php esc_html_e('Webhook Secret', 'darb-assabil'); ?></h3>
+	                <div class="secret-field">
+	                    <input type="text" name="darb_assabil_webhook_secret" 
+	                           value="<?php echo esc_attr($webhook_secret); ?>" 
+	                           class="regular-text">
+	                    <button type="button" class="button" onclick="generateSecret()">
+	                        <?php esc_html_e('Generate New Secret', 'darb-assabil'); ?>
+	                    </button>
+	                </div>
+	                <p class="description">
+	                    <?php esc_html_e('Use this secret to verify webhook signatures. Keep it safe!', 'darb-assabil'); ?>
+	                </p>
+	            </div>
+	            
+	            <?php submit_button(__('Save Webhook Settings', 'darb-assabil')); ?>
+	        </form>
+
+	        <div class="webhook-logs">
+	            <h3><?php esc_html_e('Recent Webhook Events', 'darb-assabil'); ?></h3>
+	            <p class="description">
+	                <?php esc_html_e('Below are the last 50 webhook events received:', 'darb-assabil'); ?>
+	            </p>
+	            
+	            <?php if (empty($webhook_logs)): ?>
+	                <p><?php esc_html_e('No webhook events received yet.', 'darb-assabil'); ?></p>
+	            <?php else: ?>
+	                <table class="widefat">
+	                    <thead>
+	                        <tr>
+	                            <th><?php esc_html_e('Timestamp', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Event', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Signature', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Status', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Response Status', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Message', 'darb-assabil'); ?></th>
+	                            <th><?php esc_html_e('Details', 'darb-assabil'); ?></th>
+	                        </tr>
+	                    </thead>
+	                    <tbody>
+	                        <?php foreach ($webhook_logs as $log): ?>
+	                            <tr>
+	                                <td><?php echo esc_html($log['timestamp']); ?></td>
+	                                <td><?php echo esc_html($log['event']); ?></td>
+	                                <td>
+	                                    <code class="signature-hash"> 
+	                                        <?php echo esc_html(substr($log['signature'], 0, 8) . '...'); ?>
+	                                    </code>
+	                                </td>
+	                                <td>
+	                                    <?php
+	                                    $status = str_replace('localShipments.', '', $log['event']);
+	                                    echo '<span class="status-' . esc_attr($status) . '">' 
+	                                        . esc_html(ucfirst($status)) . '</span>';
+	                                    ?>
+	                                </td>
+	                                <td>
+	                                    <?php
+	                                    $response_status = isset($log['response']['status']) ? $log['response']['status'] : 'unknown';
+	                                    $status_class = $response_status === 'success' ? 'status-success' : 'status-error';
+	                                    $status_text = $response_status === 'success' ? __('Success', 'darb-assabil') : __('Failed', 'darb-assabil');
+	                                    ?>
+	                                    <span class="response-status <?php echo esc_attr($status_class); ?>">
+	                                        <?php echo esc_html($status_text); ?>
+	                                    </span>
+	                                </td>
+	                                <td class="response-message">
+	                                    <?php 
+	                                    $message = isset($log['response']['message']) ? $log['response']['message'] : '';
+	                                    echo esc_html($message);
+	                                    ?>
+	                                </td>
+	                                <td>
+	                                    <button type="button" class="button" onclick="toggleDetails(this)">
+	                                        <?php esc_html_e('View Details', 'darb-assabil'); ?>
+	                                    </button>
+	                                    <pre class="webhook-details" style="display:none;">
+	                                        <?php echo esc_html(json_encode($log['data'], JSON_PRETTY_PRINT)); ?>
+	                                    </pre>
+	                                </td>
+	                            </tr>
+	                        <?php endforeach; ?>
+	                    </tbody>
+	                </table>
+	            <?php endif; ?>
+	        </div>
+	    </div>
+	    
+	    <style>
+	        /* Add status colors */
+	        .status-pending { color: #f0ad4e; }
+	        .status-booked { color: #5bc0de; }
+	        .status-processing { color: #0073aa; }
+	        .status-completed { color: #5cb85c; }
+	        .status-cancelled { color: #d9534f; }
+	        .status-delayed { color: #f0ad4e; }
+	        .status-returned { color: #d9534f; }
+	        .webhook-details { margin-top: 10px; }
+	        .response-status {
+		        display: inline-block;
+		        padding: 4px 8px;
+		        border-radius: 3px;
+		        font-weight: 600;
+		    }
+		    
+		    .status-success {
+		        background-color: #dff0d8;
+		        color: #3c763d;
+		        border: 1px solid #d6e9c6;
+		    }
+		    
+		    .status-error {
+		        background-color: #f2dede;
+		        color: #a94442;
+		        border: 1px solid #ebccd1;
+		    }
+		    
+		    .response-message {
+		        max-width: 200px;
+		        overflow: hidden;
+		        text-overflow: ellipsis;
+		        white-space: nowrap;
+		    }
+	    </style>
+	    
+	    <script>
+	    function generateSecret() {
+	        // Generate a random string of 32 characters
+	        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+	        let secret = '';
+	        for (let i = 0; i < 32; i++) {
+	            secret += chars.charAt(Math.floor(Math.random() * chars.length));
+	        }
+	        document.querySelector('input[name="darb_assabil_webhook_secret"]').value = secret;
+	    }
+
+	    function toggleDetails(button) {
+	        const details = button.nextElementSibling;
+	        if (details.style.display === 'none') {
+	            details.style.display = 'block';
+	            button.textContent = '<?php esc_html_e('Hide Details', 'darb-assabil'); ?>';
+	        } else {
+	            details.style.display = 'none';
+	            button.textContent = '<?php esc_html_e('View Details', 'darb-assabil'); ?>';
+	        }
+	    }
+	    </script>
+	    <?php
+	}
+
+	private function verify_webhook_signature($payload, $received_signature) {
+	    // Get API token
+	    $api_token = get_access_token(); // Your stored API token
+		$this->log('API token configured ======' . $api_token);
+	    if (empty($api_token)) {
+	        $this->log('API token not configured');
+	    }
+	    
+	    // Calculate signature
+	    $expected_signature = hash_hmac('sha256', $payload, $api_token, false);
+	    
+	    // Log for debugging
+	    $this->log('Payload: ' . $payload);
+	    $this->log('API Token: ' . substr($api_token, 0, 8) . '...');  // Log partial token for security
+	    $this->log('Received signature: ' . $received_signature);
+	    $this->log('Expected signature: ' . $expected_signature);
+	    
+	    return hash_equals($expected_signature, $received_signature);
 	}
 }

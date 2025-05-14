@@ -29,6 +29,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+require_once plugin_dir_path(__FILE__) . 'src/Helpers.php';
+
 /**
  * Check if WooCommerce is active
  * 
@@ -78,7 +80,7 @@ spl_autoload_register( function ( $class ) {
 /**
  * Initialize the plugin when WordPress is loaded
  */
-add_action( 'plugins_loaded', function() {
+add_action('plugins_loaded', function() {
 	if ( darb_assabil_check_woocommerce() ) {
 		DarbAssabil\Checkout::get_instance();
 		DarbAssabil\OrderHandler::get_instance();
@@ -97,3 +99,22 @@ add_action( 'plugins_loaded', function() {
 		});
 	}
 } );
+
+/**
+ * Save default values in the database on plugin activation
+ */
+function darb_assabil_activate_plugin() {
+    // Set default values for the options
+    if (empty(get_option('darb_assabil_use_city_dropdown'))) {
+        update_option('darb_assabil_use_city_dropdown', true);
+    }
+
+    if (empty(get_option('darb_assabil_payment_done_by_receiver'))) {
+        update_option('darb_assabil_payment_done_by_receiver', true);
+    }
+
+    if (empty(get_option('darb_assabil_include_product_payment'))) {
+        update_option('darb_assabil_include_product_payment', true);
+    }
+}
+register_activation_hook(__FILE__, 'darb_assabil_activate_plugin');

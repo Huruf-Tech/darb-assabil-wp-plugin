@@ -6,6 +6,8 @@
  */
 
 namespace DarbAssabil;
+use DarbAssabil\get_config;
+use DarbAssabil\extract_city_and_area;
 
 /**
  * Custom shipping method for Darb Assabil
@@ -82,9 +84,27 @@ class ShippingMethod extends \WC_Shipping_Method {
 	 */
 	public function calculate_shipping($package = []) {
 		$use_api = $this->get_option('use_api', 'no') === 'yes';
-		$service_id = get_option('darb_assabil_service_id', '');
-		$this->log('Using API for shipping rates. Service ID: ' . $service_id . ' | Use API: ' . ($use_api ? 'Yes' : 'No'));
-	
+
+		// Extract product details from the package
+		$products = [];
+		foreach ($package['contents'] as $item) {
+			$products[] = [
+				'sku' => $item['data']->get_sku() ?? '',
+				'title' => $item['data']->get_name() ?? '',
+				'quantity' => $item['quantity'],
+				'widthCM' => intval($item['data']->get_width()),
+				'heightCM' => intval($item['data']->get_height()),
+				'lengthCM' => intval($item['data']->get_length()),
+				'amount' => floatval(0),
+				'currency' => strtolower(get_woocommerce_currency()),
+				'isChargeable' => get_plugin_option()['include_product_payment'] ? true : false,
+			];
+		}
+
+		// $this->log('Extracted products: ' . print_r($products, true));
+
+		// $this->log('Shipping details: ' . $this->get_rate_id());
+
 		$rate = [
 			'id' => $this->get_rate_id(),
 			'label' => $this->title,
@@ -92,49 +112,37 @@ class ShippingMethod extends \WC_Shipping_Method {
 			'calc_tax' => 'per_order'
 		];
 
-		if ($use_api ) {
-			$this->log('Using API for shipping rates. Service ID: ' . $service_id);
+		if ($use_api) {
+			$city_area = extract_city_and_area($package['destination']['city']);
 
-			// Prepare payload for the API request
-			$payload = [
-				'service' => $service_id,
-				'products' => [
-					[
-						'quantity' => 1,
-						'widthCM' => 40,
-						'heightCM' => 40,
-						'lengthCM' => 50,
-						'allowInspection' => false,
-						'allowTesting' => true,
-						'isFragile' => false,
-						'amount' => 0,
-						'currency' => 'lyd',
-						'isChargeable' => true
-					]
-				],
-				'paymentBy' => 'receiver',
-				'to' => [
-					'countryCode' => 'lby',
-					'city' => 'رأس لانوف',
-					'area' => 'بن جواد',
-					'address' => 'بن جواد',
-					'location' => [
-						'lat' => 1,
-						'long' => 1
-					]
-				]
-			];
+			$this->log('City: ' . $city_area['city']);
+			$this->log('Area: ' . $city_area['area']);
+
+		// Prepare payload for the API request
+		$payload = [
+			'service' => get_plugin_option()['service'],
+			'products' => $products,
+
+			'paymentBy' => get_plugin_option()['payment_done_by_receiver'] === true ? 'receiver' : 'sender',
+			'to' => [
+				'countryCode' => 'lby',
+				'city' => $city_area['city'],
+				'area' => $city_area['area'],
+				'address' => $package['destination']['address'] ?? '',
+			],
+			'isPickup' => true,
+			'token' => get_access_token(),
+		];
 
 			// Call the external API
-			// $response = $this->call_shipping_api($payload);
-			$rate['cost'] = 89;
-			$rate['label'] = $response['label'] ?? $this->title;
-			// if (!is_wp_error($response) && isset($response['cost'])) {
-			// 	$rate['cost'] = $response['cost'];
-			// 	$rate['label'] = $response['label'] ?? $this->title;
-			// } else {
-			// 	$this->log('Darb Assabil API Error: ' . (is_wp_error($response) ? $response->get_error_message() : 'Invalid response'));
-			// }
+			$response = $this->call_shipping_api($payload);
+			$this->log('API Response: ' . print_r($response, true));
+			if (!is_wp_error($response) && isset($response['data']['amount'])) {
+				$rate['cost'] = $response['data']['amount'];
+				$rate['label'] = $response['label'] ?? $this->title;
+			} else {
+				$this->log('Darb Assabil API Error: ' . (is_wp_error($response) ? $response->get_error_message() : 'Invalid response'));
+			}
 		}
 
 		// Add the calculated rate to WooCommerce
@@ -142,24 +150,20 @@ class ShippingMethod extends \WC_Shipping_Method {
 	}
 
 	private function call_shipping_api($payload) {
-		$api_url = 'https://v2-staging.sabil.ly/api/local/shipments/calculate/shipping';
-		$bearer_token = get_option('darb_assabil_bearer_token', '');
+		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/cost';
 
 		$args = [
 			'method' => 'POST',
 			'timeout' => 30,
 			'sslverify' => false,
 			'headers' => [
-				'Content-Type' => 'application/json',
-				'Authorization' => 'Bearer ' . $bearer_token
+				'Content-Type' => 'application/json'
 			],
 			'body' => wp_json_encode($payload)
 		];
 
-		$this->log('Calling API: ' . $api_url);
-		$this->log('Payload: ' . wp_json_encode($payload));
-
 		$response = wp_remote_post($api_url, $args);
+		$this->log('API Responsessssssssssssssssssssssssssss: ' . print_r($response, true));
 
 		if (is_wp_error($response)) {
 			$this->log('API Request Error: ' . $response->get_error_message());
@@ -167,7 +171,6 @@ class ShippingMethod extends \WC_Shipping_Method {
 		}
 
 		$body = wp_remote_retrieve_body($response);
-		$this->log('API Response: ' . $body);
 
 		$data = json_decode($body, true);
 

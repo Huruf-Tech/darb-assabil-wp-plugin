@@ -7,6 +7,9 @@
 
 namespace DarbAssabil;
 
+use DarbAssabil\get_config;
+use DarbAssabil\extract_city_and_area;
+
 /**
  * Class to handle WooCommerce order processing
  */
@@ -38,17 +41,6 @@ class OrderHandler {
 	}
 
 	/**
-	 * Log a message using WordPress debug system
-	 *
-	 * @param string $message The message to log
-	 */
-	private function log($message) {
-		if (defined('WP_DEBUG') && WP_DEBUG === true) {
-			error_log("[Darb Assabil] " . $message);
-		}
-	}
-
-	/**
 	 * Constructor
 	 */
 	private function __construct() {
@@ -65,10 +57,10 @@ class OrderHandler {
 	public function handle_new_order( $order_id, $order ) {
 		$this->log("Processing new order #{$order_id}");
 		
-		if ( wp_doing_ajax() || get_post_meta( $order_id, '_darb_assabil_processed', true ) ) {
-			$this->log("Order #{$order_id} already processed or AJAX request");
-			return;
-		}
+		// if ( wp_doing_ajax() || get_post_meta( $order_id, '_darb_assabil_processed', true ) ) {
+		// 	$this->log("Order #{$order_id} already processed or AJAX request");
+		// 	return;
+		// }
 
 		try {
 			if ( ! $order instanceof \WC_Order ) {
@@ -82,7 +74,7 @@ class OrderHandler {
 			$order_data = $this->prepare_order_data( $order );
 			$this->log("Prepared order data for #{$order_id}: " . print_r($order_data, true));
 			
-			$this->send_to_api( $order_data );
+			$this->create_order( $order_data );
 			$this->log("Successfully sent order #{$order_id} to API");
 
 			update_post_meta( $order_id, '_darb_assabil_processed', true );
@@ -101,44 +93,54 @@ class OrderHandler {
 	 * @return array    Prepared order data
 	 */
 	private function prepare_order_data( $order ) {
+		$include_product_payment = get_plugin_option()['include_product_payment'];
+
+		$city_area = extract_city_and_area($order->get_billing_city());
+
+		$this->log('City: ' . $city);
+		$this->log('Area: ' . $area);
+
 		return array(
-			'order_id'       => $order->get_id(),
-			'customer_name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-			'customer_email' => $order->get_billing_email(),
-			'customer_phone' => $order->get_billing_phone(),
-			'total'          => $order->get_total(),
-			'status'         => $order->get_status(),
-			'date_created'   => $order->get_date_created()->format( 'Y-m-d H:i:s' ),
-			'billing_address' => array(
-				'address_1' => $order->get_billing_address_1(),
-				'address_2' => $order->get_billing_address_2(),
-				'city'      => $order->get_billing_city(),
-				'area'      => $order->get_meta('_billing_area'),
-				'state'     => $order->get_billing_state(),
-				'postcode'  => $order->get_billing_postcode(),
-				'country'   => $order->get_billing_country(),
+			'order' => array(
+				'service'       => get_plugin_option()['service'],
+				'notes'         => $order->get_customer_note(),
+				'contacts' => array(
+					array(
+						'name'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+						'phone'  => $order->get_billing_phone(),
+					),
+				),
+				'products' => (function() use ($order, $include_product_payment) {
+					$products = [];
+					foreach ( $order->get_items() as $item ) {
+						$product = $item->get_product();
+						$products[] = array(
+							'sku'          => $product ? $product->get_sku() : '',
+							'title'        => $item->get_name(),
+							'quantity'     => $item->get_quantity(),
+							'widthCM'      => intval( $product ? $product->get_width() : 0 ),
+							'heightCM'     => intval( $product ? $product->get_height() : 0 ),
+							'lengthCM'     => intval( $product ? $product->get_length() : 0 ),
+							'amount'       => $include_product_payment ? floatval( $item->get_total() ) : 0,
+							'currency'     => strtolower(get_woocommerce_currency()),
+							'isChargeable' => $include_product_payment ? true : false,
+						);
+					}
+					return $products;
+				})(),
+				'paymentBy'    => get_plugin_option()['payment_done_by_receiver'] === true ? 'receiver' : 'sender',
+				'to' => array(
+					'countryCode'   => 'lby',
+					'city'      => $city_area['city'],
+					'area'      => $city_area['area'],
+					'address'  => $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2(),
+				),
+				'metadata' => array(
+					'order_id' => (string) $order->get_id(),
+					'customer_id' => (string) $order->get_customer_id(),
+				),
 			),
-			'shipping_address' => array(
-				'address_1' => $order->get_shipping_address_1(),
-				'address_2' => $order->get_shipping_address_2(),
-				'city'      => $order->get_shipping_city(),
-				'area'      => $order->get_meta('_shipping_area'),
-				'state'     => $order->get_shipping_state(),
-				'postcode'  => $order->get_shipping_postcode(),
-				'country'   => $order->get_shipping_country(),
-			),
-			'items' => array_map( function( $item ) {
-				$product = $item->get_product();
-				return array(
-					'name'         => $item->get_name(),
-					'quantity'     => $item->get_quantity(),
-					'total'        => $item->get_total(),
-					'product_id'   => $item->get_product_id(),
-					'variation_id' => $item->get_variation_id(),
-					'sku'          => $product ? $product->get_sku() : '',
-					'price'        => $item->get_subtotal() / $item->get_quantity(),
-				);
-			}, $order->get_items() ),
+			'token' => get_access_token(),
 		);
 	}
 
@@ -148,14 +150,12 @@ class OrderHandler {
 	 * @param array $order_data Order data to send.
 	 * @throws \Exception If API request fails.
 	 */
-	private function send_to_api( $order_data ) {
-		// Get API settings
-		$options = get_option('darb_assabil_options', array());
-		$api_endpoint = isset($options['api_endpoint']) ? $options['api_endpoint'] : '';
+	private function create_order( $order_data ) {
+		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/create';
 		
-		$this->log("API Settings - Endpoint: {$api_endpoint}");
+		$this->log("API Settings - Endpoint: {$api_url}");
 		
-		if (empty($api_endpoint)) {
+		if (empty($api_url)) {
 			throw new \Exception('API endpoint is not configured');
 		}
 		
@@ -163,7 +163,7 @@ class OrderHandler {
 			'headers' => array(
 				'Content-Type'  => 'application/json',
 			),
-			'body'        => json_encode( $order_data ),
+			'body'        => wp_json_encode( $order_data ),
 			'method'      => 'POST',
 			'data_format' => 'body',
 			'timeout'     => 15,
@@ -171,7 +171,9 @@ class OrderHandler {
 
 		$this->log("API request args: " . print_r($args, true));
 
-		$response = wp_remote_post( $api_endpoint, $args );
+		$response = wp_remote_post($api_url, $args );
+
+		$this->log("API Response: " . print_r($response, true));
 
 		if ( is_wp_error( $response ) ) {
 			$this->log("API Error: " . $response->get_error_message());
@@ -187,5 +189,19 @@ class OrderHandler {
 		if ( $response_code !== 200 ) {
 			throw new \Exception( "API returned non-200 status code: {$response_code}" );
 		}
+	}
+
+	/**
+	 * Log messages for debugging
+	 *
+	 * @param string $message The message to log.
+	 */
+	private function log($message) {
+		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
+		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
+		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
+
+		// Write the log message to the file
+		file_put_contents($log_file, $formatted_message, FILE_APPEND);
 	}
 } 
