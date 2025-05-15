@@ -54,33 +54,45 @@ class OrderHandler {
 	 * @param int            $order_id Order ID.
 	 * @param \WC_Order|null $order    Order object.
 	 */
-	public function handle_new_order( $order_id, $order ) {
+	public function handle_new_order($order_id, $order) {
 		$this->log("Processing new order #{$order_id}");
 		
-		// if ( wp_doing_ajax() || get_post_meta( $order_id, '_darb_assabil_processed', true ) ) {
-		// 	$this->log("Order #{$order_id} already processed or AJAX request");
-		// 	return;
-		// }
-
 		try {
-			if ( ! $order instanceof \WC_Order ) {
-				$order = wc_get_order( $order_id );
+			if (!$order instanceof \WC_Order) {
+				$order = wc_get_order($order_id);
 			}
 
-			if ( ! $order ) {
-				throw new \Exception( "Failed to fetch order with ID: {$order_id}" );
+			if (!$order) {
+				throw new \Exception("Failed to fetch order with ID: {$order_id}");
 			}
 
-			$order_data = $this->prepare_order_data( $order );
+			// Check if order was already processed
+			$processed = get_post_meta($order_id, '_darb_assabil_processed', true);
+			$this->log("Order #{$order_id} processed status: " . ($processed ? 'Yes' : 'No'));
+
+			$order_data = $this->prepare_order_data($order);
 			$this->log("Prepared order data for #{$order_id}: " . print_r($order_data, true));
 			
-			$this->create_order( $order_data );
+			$this->create_order($order_data);
 			$this->log("Successfully sent order #{$order_id} to API");
 
-			update_post_meta( $order_id, '_darb_assabil_processed', true );
-		} catch ( \Exception $e ) {
+			// Save processed status
+			update_post_meta($order_id, '_darb_assabil_processed', 'yes');
+			$this->log("Marked order #{$order_id} as processed");
+
+			// Save additional metadata for tracking
+			$order->update_meta_data('_darb_assabil_processed_date', current_time('mysql'));
+			$order->update_meta_data('_darb_assabil_processed_by', get_current_user_id());
+			$order->save();
+
+		} catch (\Exception $e) {
 			$this->log('Order Error: ' . $e->getMessage());
-			if ( $this->settings->get_option( 'debug_mode' ) ) {
+			
+			// Save error state
+			update_post_meta($order_id, '_darb_assabil_error', $e->getMessage());
+			update_post_meta($order_id, '_darb_assabil_error_date', current_time('mysql'));
+			
+			if ($this->settings->get_option('debug_mode')) {
 				$this->log('Debug: ' . $e->getTraceAsString());
 			}
 		}
@@ -173,7 +185,7 @@ class OrderHandler {
 
 		$response = wp_remote_post($api_url, $args );
 
-		$this->log("API Response: " . print_r($response, true));
+		// $this->log("API Response: " . print_r($response, true));
 
 		if ( is_wp_error( $response ) ) {
 			$this->log("API Error: " . $response->get_error_message());
@@ -182,11 +194,34 @@ class OrderHandler {
 
 		$response_code = wp_remote_retrieve_response_code( $response );
 		$response_body = wp_remote_retrieve_body( $response );
+		$response_data = json_decode($response_body, true);
 		
 		$this->log("API Response Code: {$response_code}");
 		$this->log("API Response Body: {$response_body}");
+		$this->log("API Response Data: " . print_r($response_data, true));
 
-		if ( $response_code !== 200 ) {
+		// Store the API response status
+		$order_id = $order_data['order']['metadata']['order_id'];
+		$order = wc_get_order($order_id);
+		
+		$this->log('order : ' . print_r($order, true));
+		if ($response_data && isset($response_data['status'])) {
+			$order->update_meta_data('darb_assabil_api_payload', $order_data);
+			$order->update_meta_data('darb_assabil_api_status', $response_data['status'] ? 'success' : 'failed');
+			if (isset($response_data['data']['trackingNumber'])) {
+				$order->update_meta_data('darb_assabil_tracking_number', $response_data['data']['trackingNumber']);
+			}
+			if (isset($response_data['message'])) {
+				$order->update_meta_data('darb_assabil_api_message', $response_data['message']);
+			}
+			$order->save();
+		}
+
+		$order->update_meta_data('darb_assabil_api_response', $response_body);
+		$order->save();
+		$this->log("API Response saved to order meta");
+
+		if ($response_code !== 200 ) {
 			throw new \Exception( "API returned non-200 status code: {$response_code}" );
 		}
 	}
@@ -204,4 +239,4 @@ class OrderHandler {
 		// Write the log message to the file
 		file_put_contents($log_file, $formatted_message, FILE_APPEND);
 	}
-} 
+}

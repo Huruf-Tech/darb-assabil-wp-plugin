@@ -56,6 +56,7 @@ class AdminSettings {
 		add_action('admin_init', array($this, 'check_and_save_token')); // Hook to check and save the token
 		add_action('init', array($this, 'register_webhook_endpoint'));
 		add_action('parse_request', array($this, 'handle_webhook_request'));
+		add_action('wp_ajax_retry_darb_assabil_order', array($this, 'handle_retry_order'));
 	}
 
 	/**
@@ -174,43 +175,379 @@ class AdminSettings {
 	 * Render the settings page with tabs
 	 */
 	public function render_settings_page() {
-		$current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'settings'; // Default to 'settings'
+	    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders'; // Changed default to orders
 
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-			
-			<!-- Tabs -->
-			<h2 class="nav-tab-wrapper">
-				<a href="?page=darb-assabil-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Settings', 'darb-assabil'); ?>
-				</a>
-				<a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Integration', 'darb-assabil'); ?>
-				</a>
-				<a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Webhooks', 'darb-assabil'); ?>
-				</a>
-			</h2>
+	    ?>
+	    <div class="wrap">
+	        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+	        
+	        <!-- Tabs -->
+	        <h2 class="nav-tab-wrapper">
+	            <a href="?page=darb-assabil-settings&tab=orders" class="nav-tab <?php echo $current_tab === 'orders' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Orders', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Settings', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Integration', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Webhooks', 'darb-assabil'); ?>
+	            </a>
+	        </h2>
 
-			<!-- Tab Content -->
-			<?php if ($current_tab === 'webhooks'): ?>
-				<?php $this->render_webhook_tab(); ?>
-			<?php else: ?>
-				<form action="options.php" method="post">
-					<?php
-					if ($current_tab === 'settings') {
-						settings_fields('darb_assabil_options');
-						do_settings_sections('darb-assabil-settings');
-						submit_button();
-					} elseif ($current_tab === 'integration') { // Ensure lowercase 'integration'
-						$this->render_integrate_tab();
-					}
-					?>
-				</form>
-			<?php endif; ?>
-		</div>
-		<?php
+	        <!-- Tab Content -->
+	        <?php if ($current_tab === 'webhooks'): ?>
+	            <?php $this->render_webhook_tab(); ?>
+	        <?php elseif ($current_tab === 'orders'): ?>
+	            <?php $this->render_orders_tab(); ?>
+	        <?php else: ?>
+	            <form action="options.php" method="post">
+	                <?php
+	                if ($current_tab === 'settings') {
+	                    settings_fields('darb_assabil_options');
+	                    do_settings_sections('darb-assabil-settings');
+	                    submit_button();
+	                } elseif ($current_tab === 'integration') {
+	                    $this->render_integrate_tab();
+	                }
+	                ?>
+	            </form>
+	        <?php endif; ?>
+	    </div>
+	    <?php
+	}
+
+	/**
+	 * Render the Orders tab content
+	 */
+	private function render_orders_tab() {
+	    // Get all orders with Darb Assabil metadata
+		$args = array(
+			'post_type' => 'shop_order',
+			'posts_per_page' => -1,
+			'post_status' => 'any',
+			'meta_query' => array(
+				'relation' => 'OR',
+				array(
+					'key' => '_darb_assabil_processed',
+					'compare' => 'EXISTS',
+				),
+				array(
+					'key' => 'darb_assabil_api_status',
+					'compare' => 'EXISTS',
+				)
+			),
+		);
+
+	    $orders = wc_get_orders($args);
+		$this->log('Orders retrieved with meta query: ' . print_r($orders, true));
+	    ?>
+	    <div class="darb-assabil-orders wrap">
+	        <h2><?php esc_html_e('Darb Assabil Orders', 'darb-assabil'); ?></h2>
+	        
+	        <div class="tablenav top">
+	            <div class="alignleft actions bulkactions">
+	                <select name="bulk-action">
+	                    <option value="-1"><?php esc_html_e('Bulk Actions', 'darb-assabil'); ?></option>
+	                    <option value="retry"><?php esc_html_e('Retry Selected', 'darb-assabil'); ?></option>
+	                </select>
+	                <input type="submit" class="button action" id="doaction" value="<?php esc_html_e('Apply', 'darb-assabil'); ?>">
+	            </div>
+	        </div>
+
+	        <table class="widefat fixed striped">
+	            <thead>
+	                <tr>
+	                    <td class="manage-column column-cb check-column">
+	                        <input type="checkbox" id="cb-select-all-1">
+	                    </td>
+	                    <th><?php esc_html_e('Order ID', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Date', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Status', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Darb Status', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Tracking Number', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('API Payload', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('API Response', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Actions', 'darb-assabil'); ?></th>
+	                </tr>
+	            </thead>
+	            <tbody>
+	                <?php if (empty($orders)) : ?>
+	                    <tr>
+	                        <td colspan="10"><?php esc_html_e('No orders found.', 'darb-assabil'); ?></td>
+	                    </tr>
+	                <?php else : ?>
+	                    <?php foreach ($orders as $order) : 
+						    $darb_status = $order->get_meta('darb_assabil_api_status');
+						    $show_checkbox = ($darb_status !== 'success');
+						?>
+	                        <tr>
+	                            <th scope="row" class="check-column">
+	                                <?php if ($show_checkbox) : ?>
+	                                    <input type="checkbox" name="order[]" value="<?php echo esc_attr($order->get_id()); ?>">
+	                                <?php endif; ?>
+	                            </th>
+	                            <td>
+	                                <a href="<?php echo esc_url(get_edit_post_link($order->get_id())); ?>">
+	                                    #<?php echo esc_html($order->get_order_number()); ?>
+	                                </a>
+	                            </td>
+	                            <td><?php echo esc_html($order->get_date_created()->date_i18n(get_option('date_format') . ' ' . get_option('time_format'))); ?></td>
+	                            <td>
+	                                <span class="order-status status-<?php echo esc_attr($order->get_status()); ?>">
+	                                    <?php echo esc_html(wc_get_order_status_name($order->get_status())); ?>
+	                                </span>
+	                            </td>
+	                            <td>
+	                                <?php
+	                                $darb_status = $order->get_meta('darb_assabil_api_status');
+	                                $status_class = $darb_status === 'success' ? 'success' : ($darb_status === 'failed' ? 'failed' : 'unknown');
+	                                ?>
+	                                <span class="darb-status <?php echo esc_attr($status_class); ?>">
+	                                    <?php echo $darb_status ? esc_html($darb_status) : esc_html__('Not Processed', 'darb-assabil'); ?>
+	                                </span>
+	                            </td>
+	                            <td>
+	                                <?php
+	                                $tracking_number = $order->get_meta('darb_assabil_tracking_number');
+	                                echo $tracking_number ? esc_html($tracking_number) : '-';
+	                                ?>
+	                            </td>
+	                            <td>
+									<?php
+									$payload = $order->get_meta('darb_assabil_api_payload');
+									$this->log('order Payload: ' . print_r($payload, true));
+									if ($payload) {
+										// Ensure proper JSON encoding and escaping
+										$json_payload = json_encode($payload, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+										?>
+										<button class="button view-data" data-type="payload" data-content="<?php echo esc_attr($json_payload); ?>">
+											<?php esc_html_e('View Payload', 'darb-assabil'); ?>
+										</button>
+									<?php } ?>
+								</td>
+								<td>
+									<?php
+									$response = $order->get_meta('darb_assabil_api_response');
+									$this->log('order Response: ' . print_r($response, true));
+									if ($response) {
+										// Ensure proper JSON encoding and escaping
+										$json_response = is_string($response) ? $response : json_encode($response, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+										?>
+										<button class="button view-data" data-type="response" data-content="<?php echo esc_attr($json_response); ?>">
+											<?php esc_html_e('View Response', 'darb-assabil'); ?>
+										</button>
+									<?php } ?>
+								</td>
+	                            <td>
+	                                <?php if ($darb_status === 'failed' || !$darb_status) : ?>
+	                                    <button class="button retry-order" data-order-id="<?php echo esc_attr($order->get_id()); ?>">
+	                                        <?php esc_html_e('Retry', 'darb-assabil'); ?>
+	                                    </button>
+	                                <?php endif; ?>
+	                            </td>
+	                        </tr>
+	                    <?php endforeach; ?>
+	                <?php endif; ?>
+	            </tbody>
+	        </table>
+	    </div>
+
+	    <!-- Modal for displaying JSON data -->
+	    <div id="json-modal" class="modal">
+	        <div class="modal-content">
+	            <div class="modal-header">
+	                <span class="close">&times;</span>
+	                <h3 class="modal-title"></h3>
+	            </div>
+	            <div class="modal-body">
+	                <pre id="json-content"></pre>
+	            </div>
+	        </div>
+	    </div>
+
+	    <style>
+	        /* ... existing styles ... */
+
+	        .modal {
+	            display: none;
+	            position: fixed;
+	            z-index: 1000;
+	            left: 0;
+	            top: 0;
+	            width: 100%;
+	            height: 100%;
+	            background-color: rgba(0,0,0,0.4);
+	        }
+
+	        .modal-content {
+	            background-color: #fefefe;
+	            margin: 15% auto;
+	            padding: 20px;
+	            border: 1px solid #888;
+	            width: 80%;
+	            max-height: 70vh;
+	            overflow-y: auto;
+	        }
+
+	        .close {
+	            color: #aaa;
+	            float: right;
+	            font-size: 28px;
+	            font-weight: bold;
+	            cursor: pointer;
+	        }
+
+	        pre {
+	            white-space: pre-wrap;
+	            word-wrap: break-word;
+	        }
+
+	        /* Order status colors */
+		    .order-status {
+		        display: inline-block;
+		        padding: 4px 8px;
+		        border-radius: 3px;
+		        font-weight: 600;
+		    }
+		    .status-processing { background: #c6e1c6; color: #5b841b; }
+		    .status-completed { background: #c8d7e1; color: #2e4453; }
+		    .status-on-hold { background: #f8dda7; color: #94660c; }
+		    .status-failed { background: #eba3a3; color: #761919; }
+		    .status-cancelled { background: #e5e5e5; color: #777; }
+		    
+		    /* Darb status colors */
+		    .darb-status {
+		        display: inline-block;
+		        padding: 4px 8px;
+		        border-radius: 3px;
+		        font-weight: 600;
+		    }
+		    .darb-status.success { background: #c6e1c6; color: #5b841b; }
+		    .darb-status.failed { background: #eba3a3; color: #761919; }
+		    .darb-status.unknown { background: #e5e5e5; color: #777; }
+
+	        .modal-header {
+	            padding: 10px 20px;
+	            border-bottom: 1px solid #ddd;
+	        }
+	        .modal-header h3 {
+	            margin: 0;
+	            display: inline-block;
+	        }
+	        .modal-body {
+	            padding: 20px;
+	        }
+	        .modal-content {
+	            max-width: 800px;
+	        }
+	        pre#json-content {
+	            background: #f5f5f5;
+	            padding: 15px;
+	            border: 1px solid #ddd;
+	            border-radius: 4px;
+	        }
+	    </style>
+
+	    <script>
+	    jQuery(document).ready(function($) {
+	        // Bulk action handling
+	        $('#doaction').on('click', function(e) {
+	            e.preventDefault();
+	            var action = $('select[name="bulk-action"]').val();
+	            var selectedOrders = $('input[name="order[]"]:checked').map(function() {
+	                return $(this).val();
+	            }).get();
+
+	            if (action === 'retry' && selectedOrders.length > 0) {
+	                retryOrders(selectedOrders);
+	            }
+	        });
+
+	        // Select all checkbox
+	        $('#cb-select-all-1').on('change', function() {
+	            $('input[name="order[]"]').prop('checked', $(this).prop('checked'));
+	        });
+
+	        // Modal handling
+	        var modal = $('#json-modal');
+	        var span = $('.close');
+
+	        $('.view-data').on('click', function() {
+	            var content = JSON.parse($(this).data('content'));
+	            $('#json-content').text(JSON.stringify(content, null, 2));
+	            modal.show();
+	        });
+
+	        span.on('click', function() {
+	            modal.hide();
+	        });
+
+	        $(window).on('click', function(e) {
+	            if ($(e.target).is(modal)) {
+	                modal.hide();
+	            }
+	        });
+
+	        // ... existing retry-order click handler ...
+
+	        function retryOrders(orderIds) {
+	            orderIds.forEach(function(orderId) {
+	                $.ajax({
+	                    url: ajaxurl,
+	                    type: 'POST',
+	                    data: {
+	                        action: 'retry_darb_assabil_order',
+	                        order_id: orderId,
+	                        nonce: '<?php echo wp_create_nonce('retry-darb-assabil-order'); ?>'
+	                    },
+	                    success: function(response) {
+	                        if (response.success) {
+	                            location.reload();
+	                        }
+	                    }
+	                });
+	            });
+	        }
+	    });
+	    </script>
+	    <script>
+jQuery(document).ready(function($) {
+    // Existing code...
+
+    // Updated modal handling
+    $('.view-data').on('click', function() {
+        var content = $(this).data('content');
+        var type = $(this).data('type');
+        
+        try {
+            // Parse the content if it's a string
+            if (typeof content === 'string') {
+                content = JSON.parse(content);
+            }
+            
+            // Format the JSON with proper indentation
+            var formattedContent = JSON.stringify(content, null, 2);
+            
+            // Update modal title based on type
+            var title = type === 'payload' ? 'API Payload' : 'API Response';
+            $('#json-modal .modal-title').text(title);
+            
+            // Update content
+            $('#json-content').text(formattedContent);
+            $('#json-modal').show();
+        } catch (e) {
+            console.error('Error parsing JSON:', e);
+            alert('Error displaying data. Please check console for details.');
+        }
+    });
+
+    // Existing code...
+});
+</script>
+	    <?php
 	}
 
 	/**
@@ -1032,5 +1369,33 @@ class AdminSettings {
 	    $this->log('Expected signature: ' . $expected_signature);
 	    
 	    return hash_equals($expected_signature, $received_signature);
+	}
+
+	/**
+	 * Handle retry order AJAX request
+	 */
+	public function handle_retry_order() {
+	    check_ajax_referer('retry-darb-assabil-order', 'nonce');
+
+	    if (!current_user_can('manage_woocommerce')) {
+	        wp_send_json_error('Permission denied');
+	    }
+
+	    $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+	    if (!$order_id) {
+	        wp_send_json_error('Invalid order ID');
+	    }
+
+	    try {
+	        // Get the order handler instance
+	        $order_handler = \DarbAssabil\OrderHandler::get_instance();
+	        
+	        // Process the order
+	        $order_handler->handle_new_order($order_id, null);
+	        
+	        wp_send_json_success();
+	    } catch (Exception $e) {
+	        wp_send_json_error($e->getMessage());
+	    }
 	}
 }
