@@ -318,10 +318,9 @@ class AdminSettings {
 	                            <td>
 									<?php
 									$payload = $order->get_meta('darb_assabil_api_payload');
-									$this->log('order Payload: ' . print_r($payload, true));
 									if ($payload) {
-										// Ensure proper JSON encoding and escaping
-										$json_payload = json_encode($payload, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+										// Ensure proper JSON encoding
+										$json_payload = is_array($payload) ? json_encode($payload) : $payload;
 										?>
 										<button class="button view-data" data-type="payload" data-content="<?php echo esc_attr($json_payload); ?>">
 											<?php esc_html_e('View Payload', 'darb-assabil'); ?>
@@ -331,10 +330,9 @@ class AdminSettings {
 								<td>
 									<?php
 									$response = $order->get_meta('darb_assabil_api_response');
-									$this->log('order Response: ' . print_r($response, true));
 									if ($response) {
-										// Ensure proper JSON encoding and escaping
-										$json_response = is_string($response) ? $response : json_encode($response, JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+										// Ensure proper JSON encoding
+										$json_response = is_string($response) ? $response : json_encode($response);
 										?>
 										<button class="button view-data" data-type="response" data-content="<?php echo esc_attr($json_response); ?>">
 											<?php esc_html_e('View Response', 'darb-assabil'); ?>
@@ -452,67 +450,51 @@ class AdminSettings {
 	    </style>
 
 	    <script>
-	    jQuery(document).ready(function($) {
-	        // Bulk action handling
-	        $('#doaction').on('click', function(e) {
-	            e.preventDefault();
-	            var action = $('select[name="bulk-action"]').val();
-	            var selectedOrders = $('input[name="order[]"]:checked').map(function() {
-	                return $(this).val();
-	            }).get();
+jQuery(document).ready(function($) {
+    // Modal handling
+    var modal = $('#json-modal');
+    var span = $('.close');
 
-	            if (action === 'retry' && selectedOrders.length > 0) {
-	                retryOrders(selectedOrders);
-	            }
-	        });
+    $('.view-data').on('click', function() {
+        var content = $(this).data('content');
+        var type = $(this).data('type');
+        
+        try {
+            // Parse the content if it's a string
+            var jsonContent = typeof content === 'string' ? JSON.parse(content) : content;
+            
+            // Format the JSON with proper indentation
+            var formattedContent = JSON.stringify(jsonContent, null, 2);
+            
+            // Update modal title based on type
+            var title = type === 'payload' ? 'API Payload' : 'API Response';
+            $('#json-modal .modal-title').text(title);
+            
+            // Update content
+            $('#json-content').text(formattedContent);
+            
+            // Show modal
+            modal.show();
+        } catch (e) {
+            console.error('Error parsing JSON:', e);
+            console.log('Content:', content);
+            alert('Error displaying data. Please check browser console for details.');
+        }
+    });
 
-	        // Select all checkbox
-	        $('#cb-select-all-1').on('change', function() {
-	            $('input[name="order[]"]').prop('checked', $(this).prop('checked'));
-	        });
+    // Close modal when clicking the x
+    span.on('click', function() {
+        modal.hide();
+    });
 
-	        // Modal handling
-	        var modal = $('#json-modal');
-	        var span = $('.close');
-
-	        $('.view-data').on('click', function() {
-	            var content = JSON.parse($(this).data('content'));
-	            $('#json-content').text(JSON.stringify(content, null, 2));
-	            modal.show();
-	        });
-
-	        span.on('click', function() {
-	            modal.hide();
-	        });
-
-	        $(window).on('click', function(e) {
-	            if ($(e.target).is(modal)) {
-	                modal.hide();
-	            }
-	        });
-
-	        // ... existing retry-order click handler ...
-
-	        function retryOrders(orderIds) {
-	            orderIds.forEach(function(orderId) {
-	                $.ajax({
-	                    url: ajaxurl,
-	                    type: 'POST',
-	                    data: {
-	                        action: 'retry_darb_assabil_order',
-	                        order_id: orderId,
-	                        nonce: '<?php echo wp_create_nonce('retry-darb-assabil-order'); ?>'
-	                    },
-	                    success: function(response) {
-	                        if (response.success) {
-	                            location.reload();
-	                        }
-	                    }
-	                });
-	            });
-	        }
-	    });
-	    </script>
+    // Close modal when clicking outside
+    $(window).on('click', function(e) {
+        if ($(e.target).is(modal)) {
+            modal.hide();
+        }
+    });
+});
+</script>
 	    <script>
 jQuery(document).ready(function($) {
     // Existing code...

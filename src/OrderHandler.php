@@ -208,8 +208,8 @@ class OrderHandler {
 		if ($response_data && isset($response_data['status'])) {
 			$order->update_meta_data('darb_assabil_api_payload', $order_data);
 			$order->update_meta_data('darb_assabil_api_status', $response_data['status'] ? 'success' : 'failed');
-			if (isset($response_data['data']['trackingNumber'])) {
-				$order->update_meta_data('darb_assabil_tracking_number', $response_data['data']['trackingNumber']);
+			if (isset($response_data['data']['reference'])) {
+				$order->update_meta_data('darb_assabil_tracking_number', $response_data['data']['reference']);
 			}
 			if (isset($response_data['message'])) {
 				$order->update_meta_data('darb_assabil_api_message', $response_data['message']);
