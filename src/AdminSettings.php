@@ -57,6 +57,8 @@ class AdminSettings {
 		add_action('init', array($this, 'register_webhook_endpoint'));
 		add_action('parse_request', array($this, 'handle_webhook_request'));
 		add_action('wp_ajax_retry_darb_assabil_order', array($this, 'handle_retry_order'));
+		add_action('wp_ajax_save_darb_assabil_payload', array($this, 'handle_save_payload'));
+		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_styles'));
 	}
 
 	/**
@@ -283,7 +285,7 @@ class AdminSettings {
 						    $darb_status = $order->get_meta('darb_assabil_api_status');
 						    $show_checkbox = ($darb_status !== 'success');
 						?>
-	                        <tr>
+	                        <tr data-order-id="<?php echo esc_attr($order->get_id()); ?>">
 	                            <th scope="row" class="check-column">
 	                                <?php if ($show_checkbox) : ?>
 	                                    <input type="checkbox" name="order[]" value="<?php echo esc_attr($order->get_id()); ?>">
@@ -352,183 +354,23 @@ class AdminSettings {
 	            </tbody>
 	        </table>
 	    </div>
-
-	    <!-- Modal for displaying JSON data -->
-	    <div id="json-modal" class="modal">
+	    <!-- Add this modal structure at the end -->
+	    <div id="json-modal" class="modal" style="display:none;">
 	        <div class="modal-content">
 	            <div class="modal-header">
 	                <span class="close">&times;</span>
-	                <h3 class="modal-title"></h3>
+	                <h3 class="modal-title">API Data</h3>
 	            </div>
 	            <div class="modal-body">
-	                <pre id="json-content"></pre>
+	                <textarea id="json-content" class="json-editor"></textarea>
+	            </div>
+	            <div class="modal-footer">
+	                <button type="button" class="button save-json">
+	                    <?php esc_html_e('Save Changes', 'darb-assabil'); ?>
+	                </button>
 	            </div>
 	        </div>
 	    </div>
-
-	    <style>
-	        /* ... existing styles ... */
-
-	        .modal {
-	            display: none;
-	            position: fixed;
-	            z-index: 1000;
-	            left: 0;
-	            top: 0;
-	            width: 100%;
-	            height: 100%;
-	            background-color: rgba(0,0,0,0.4);
-	        }
-
-	        .modal-content {
-	            background-color: #fefefe;
-	            margin: 15% auto;
-	            padding: 20px;
-	            border: 1px solid #888;
-	            width: 80%;
-	            max-height: 70vh;
-	            overflow-y: auto;
-	        }
-
-	        .close {
-	            color: #aaa;
-	            float: right;
-	            font-size: 28px;
-	            font-weight: bold;
-	            cursor: pointer;
-	        }
-
-	        pre {
-	            white-space: pre-wrap;
-	            word-wrap: break-word;
-	        }
-
-	        /* Order status colors */
-		    .order-status {
-		        display: inline-block;
-		        padding: 4px 8px;
-		        border-radius: 3px;
-		        font-weight: 600;
-		    }
-		    .status-processing { background: #c6e1c6; color: #5b841b; }
-		    .status-completed { background: #c8d7e1; color: #2e4453; }
-		    .status-on-hold { background: #f8dda7; color: #94660c; }
-		    .status-failed { background: #eba3a3; color: #761919; }
-		    .status-cancelled { background: #e5e5e5; color: #777; }
-		    
-		    /* Darb status colors */
-		    .darb-status {
-		        display: inline-block;
-		        padding: 4px 8px;
-		        border-radius: 3px;
-		        font-weight: 600;
-		    }
-		    .darb-status.success { background: #c6e1c6; color: #5b841b; }
-		    .darb-status.failed { background: #eba3a3; color: #761919; }
-		    .darb-status.unknown { background: #e5e5e5; color: #777; }
-
-	        .modal-header {
-	            padding: 10px 20px;
-	            border-bottom: 1px solid #ddd;
-	        }
-	        .modal-header h3 {
-	            margin: 0;
-	            display: inline-block;
-	        }
-	        .modal-body {
-	            padding: 20px;
-	        }
-	        .modal-content {
-	            max-width: 800px;
-	        }
-	        pre#json-content {
-	            background: #f5f5f5;
-	            padding: 15px;
-	            border: 1px solid #ddd;
-	            border-radius: 4px;
-	        }
-	    </style>
-
-	    <script>
-jQuery(document).ready(function($) {
-    // Modal handling
-    var modal = $('#json-modal');
-    var span = $('.close');
-
-    $('.view-data').on('click', function() {
-        var content = $(this).data('content');
-        var type = $(this).data('type');
-        
-        try {
-            // Parse the content if it's a string
-            var jsonContent = typeof content === 'string' ? JSON.parse(content) : content;
-            
-            // Format the JSON with proper indentation
-            var formattedContent = JSON.stringify(jsonContent, null, 2);
-            
-            // Update modal title based on type
-            var title = type === 'payload' ? 'API Payload' : 'API Response';
-            $('#json-modal .modal-title').text(title);
-            
-            // Update content
-            $('#json-content').text(formattedContent);
-            
-            // Show modal
-            modal.show();
-        } catch (e) {
-            console.error('Error parsing JSON:', e);
-            console.log('Content:', content);
-            alert('Error displaying data. Please check browser console for details.');
-        }
-    });
-
-    // Close modal when clicking the x
-    span.on('click', function() {
-        modal.hide();
-    });
-
-    // Close modal when clicking outside
-    $(window).on('click', function(e) {
-        if ($(e.target).is(modal)) {
-            modal.hide();
-        }
-    });
-});
-</script>
-	    <script>
-jQuery(document).ready(function($) {
-    // Existing code...
-
-    // Updated modal handling
-    $('.view-data').on('click', function() {
-        var content = $(this).data('content');
-        var type = $(this).data('type');
-        
-        try {
-            // Parse the content if it's a string
-            if (typeof content === 'string') {
-                content = JSON.parse(content);
-            }
-            
-            // Format the JSON with proper indentation
-            var formattedContent = JSON.stringify(content, null, 2);
-            
-            // Update modal title based on type
-            var title = type === 'payload' ? 'API Payload' : 'API Response';
-            $('#json-modal .modal-title').text(title);
-            
-            // Update content
-            $('#json-content').text(formattedContent);
-            $('#json-modal').show();
-        } catch (e) {
-            console.error('Error parsing JSON:', e);
-            alert('Error displaying data. Please check console for details.');
-        }
-    });
-
-    // Existing code...
-});
-</script>
 	    <?php
 	}
 
@@ -843,7 +685,7 @@ jQuery(document).ready(function($) {
 	}
 
 	/**
-	 * Handle webhook request with X-Darb-Signature verification
+	 * Handle webhook request with X-Payload-Signature verification
 	 */
 	public function handle_webhook_request($wp) {
 	    if (!isset($wp->query_vars['darb_assabil_webhook'])) {
@@ -852,9 +694,16 @@ jQuery(document).ready(function($) {
 
 	    // Get payload and headers
 	    $payload = file_get_contents('php://input');
+
+		$this->log('Webhook payload: ' . $payload);
 	    $headers = getallheaders();
-	    $signature = isset($headers['X-Darb-Signature']) ? $headers['X-Darb-Signature'] : '';
+		$this->log('Webhook headers: ' . print_r($headers, true));
+	    $signature = isset($headers['X-Payload-Signature']) ? $headers['X-Payload-Signature'] : '';
 	    
+	    $data = json_decode($payload, true);
+
+		$this->log('Webhook payload after decoding: ' . $data);
+
 	    // Verify signature
 	    if (!$this->verify_webhook_signature($payload, $signature)) {
 	        $this->log('Invalid webhook signature');
@@ -863,7 +712,6 @@ jQuery(document).ready(function($) {
 	    }
 
 	    // Parse payload
-	    $data = json_decode($payload, true);
 	    if (json_last_error() !== JSON_ERROR_NONE || empty($data['event'])) {
 	        $this->log('Invalid webhook payload: ' . json_last_error_msg());
 	        wp_send_json_error('Invalid payload', 400);
@@ -959,13 +807,13 @@ jQuery(document).ready(function($) {
 	            return $this->process_shipment_status_change($data, 'delayed', 'on-hold');
 	            
 	        case 'localShipments.released':
-	            return $this->process_shipment_status_change($data, 'released', 'processing');
+	            return $this->process_shipment_status_change($data, 'released', 'cancelled');
 	            
 	        case 'localShipments.returning':
-	            return $this->process_shipment_status_change($data, 'returning', 'on-hold');
+	            return $this->process_shipment_status_change($data, 'returning', 'cancelled');
 	            
 	        case 'localShipments.returned':
-	            return $this->process_shipment_status_change($data, 'returned', 'failed');
+	            return $this->process_shipment_status_change($data, 'returned', 'cancelled');
 	            
 	        default:
 	            $this->log('Unhandled webhook event: ' . $event);
@@ -978,14 +826,15 @@ jQuery(document).ready(function($) {
 	 */
 	private function process_shipment_status_change($data, $darb_status, $wc_status) {
 	    $payload = $data['payload'];
+		$wc_order_id = $payload['metadata']['order_id'];
 	    
-	    if (empty($payload['orderId'])) {
+	    if (empty($wc_order_id)) {
 	        throw new Exception('Missing order ID in payload');
 	    }
 
-	    $order = wc_get_order($payload['orderId']);
+	    $order = wc_get_order($wc_order_id);
 	    if (!$order) {
-	        throw new Exception('Order not found: ' . $payload['orderId']);
+	        throw new Exception('Order not found: ' . $wc_order_id);
 	    }
 
 	    // Update order status and metadata
@@ -1270,86 +1119,30 @@ jQuery(document).ready(function($) {
 	            <?php endif; ?>
 	        </div>
 	    </div>
-	    
-	    <style>
-	        /* Add status colors */
-	        .status-pending { color: #f0ad4e; }
-	        .status-booked { color: #5bc0de; }
-	        .status-processing { color: #0073aa; }
-	        .status-completed { color: #5cb85c; }
-	        .status-cancelled { color: #d9534f; }
-	        .status-delayed { color: #f0ad4e; }
-	        .status-returned { color: #d9534f; }
-	        .webhook-details { margin-top: 10px; }
-	        .response-status {
-		        display: inline-block;
-		        padding: 4px 8px;
-		        border-radius: 3px;
-		        font-weight: 600;
-		    }
-		    
-		    .status-success {
-		        background-color: #dff0d8;
-		        color: #3c763d;
-		        border: 1px solid #d6e9c6;
-		    }
-		    
-		    .status-error {
-		        background-color: #f2dede;
-		        color: #a94442;
-		        border: 1px solid #ebccd1;
-		    }
-		    
-		    .response-message {
-		        max-width: 200px;
-		        overflow: hidden;
-		        text-overflow: ellipsis;
-		        white-space: nowrap;
-		    }
-	    </style>
-	    
-	    <script>
-	    function generateSecret() {
-	        // Generate a random string of 32 characters
-	        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-	        let secret = '';
-	        for (let i = 0; i < 32; i++) {
-	            secret += chars.charAt(Math.floor(Math.random() * chars.length));
-	        }
-	        document.querySelector('input[name="darb_assabil_webhook_secret"]').value = secret;
-	    }
-
-	    function toggleDetails(button) {
-	        const details = button.nextElementSibling;
-	        if (details.style.display === 'none') {
-	            details.style.display = 'block';
-	            button.textContent = '<?php esc_html_e('Hide Details', 'darb-assabil'); ?>';
-	        } else {
-	            details.style.display = 'none';
-	            button.textContent = '<?php esc_html_e('View Details', 'darb-assabil'); ?>';
-	        }
-	    }
-	    </script>
 	    <?php
 	}
 
 	private function verify_webhook_signature($payload, $received_signature) {
-	    // Get API token
-	    $api_token = get_access_token(); // Your stored API token
-		$this->log('API token configured ======' . $api_token);
-	    if (empty($api_token)) {
-	        $this->log('API token not configured');
+	    // Get webhook secret from WordPress options
+	    $webhook_secret = get_plugin_option()['darb_assabil_webhook_secret'];
+	    
+	    $this->log('Webhook secret configured: ' . ($webhook_secret ? 'Yes' : 'No'));
+	    
+	    if (empty($webhook_secret)) {
+	        $this->log('Webhook secret not configured');
+	        return false;
 	    }
 	    
-	    // Calculate signature
-	    $expected_signature = hash_hmac('sha256', $payload, $api_token, false);
+	    // Calculate signature using webhook secret
+	    $expected_signature = hash('sha256', $payload . ":" . $webhook_secret);
 	    
 	    // Log for debugging
 	    $this->log('Payload: ' . $payload);
-	    $this->log('API Token: ' . substr($api_token, 0, 8) . '...');  // Log partial token for security
+	    $this->log('Webhook Secret (first 8 chars): ' . substr($webhook_secret, 0, 8) . '...');
 	    $this->log('Received signature: ' . $received_signature);
 	    $this->log('Expected signature: ' . $expected_signature);
 	    
+	    // Compare signatures using hash_equals to prevent timing attacks
 	    return hash_equals($expected_signature, $received_signature);
 	}
 
@@ -1379,5 +1172,86 @@ jQuery(document).ready(function($) {
 	    } catch (Exception $e) {
 	        wp_send_json_error($e->getMessage());
 	    }
+	}
+
+	public function handle_save_payload() {
+	    check_ajax_referer('save-darb-assabil-payload', 'nonce');
+
+	    if (!current_user_can('manage_woocommerce')) {
+	        wp_send_json_error('Permission denied');
+	    }
+
+	    // Get the raw POST data instead of using $_POST
+	    $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+	    $payload = isset($_POST['payload']) ? stripslashes($_POST['payload']) : '';
+
+	    if (!$order_id) {
+	        wp_send_json_error('Invalid order ID');
+	    }
+
+	    if (empty($payload)) {
+	        wp_send_json_error('Empty payload');
+	    }
+
+	    try {
+	        $order = wc_get_order($order_id);
+	        if (!$order) {
+	            throw new Exception('Order not found');
+	        }
+
+	        // Validate JSON
+	        $decoded_payload = json_decode($payload, true);
+	        if (json_last_error() !== JSON_ERROR_NONE) {
+	            throw new Exception('Invalid JSON format: ' . json_last_error_msg());
+	        }
+
+	        // Update the payload
+	        $order->update_meta_data('darb_assabil_api_payload', $decoded_payload);
+	        $order->save();
+
+	        // Log successful update
+	        error_log('Payload saved successfully for order ' . $order_id);
+	        error_log('Payload: ' . print_r($decoded_payload, true));
+
+	        wp_send_json_success('Payload saved successfully');
+	    } catch (Exception $e) {
+	        error_log('Error saving payload: ' . $e->getMessage());
+	        error_log('Order ID: ' . $order_id);
+	        error_log('Raw payload: ' . $payload);
+	        wp_send_json_error($e->getMessage());
+	    }
+	}
+
+	/**
+	 * Enqueue admin styles and scripts
+	 */
+	public function enqueue_admin_styles() {
+	    // Enqueue CSS
+	    wp_enqueue_style(
+	        'darb-assabil-admin',
+	        plugin_dir_url(__DIR__) . 'assets/css/style.css',
+	        array(),
+	        filemtime(plugin_dir_path(__DIR__) . 'assets/css/style.css')
+	    );
+
+	    // Enqueue JavaScript
+	    wp_enqueue_script(
+	        'darb-assabil-admin',
+	        plugin_dir_url(__DIR__) . 'assets/js/admin.js',
+	        array('jquery'),
+	        filemtime(plugin_dir_path(__DIR__) . 'assets/js/admin.js'),
+	        true
+	    );
+
+	    // Localize script with translation strings and nonce
+	    wp_localize_script(
+	        'darb-assabil-admin',
+	        'darbAssabilAdmin',
+	        array(
+	            'payloadNonce' => wp_create_nonce('save-darb-assabil-payload'),
+	            'hideDetailsText' => __('Hide Details', 'darb-assabil'),
+	            'viewDetailsText' => __('View Details', 'darb-assabil')
+	        )
+	    );
 	}
 }
