@@ -56,6 +56,9 @@ class AdminSettings {
 		add_action('admin_init', array($this, 'check_and_save_token')); // Hook to check and save the token
 		add_action('init', array($this, 'register_webhook_endpoint'));
 		add_action('parse_request', array($this, 'handle_webhook_request'));
+		add_action('wp_ajax_retry_darb_assabil_order', array($this, 'handle_retry_order'));
+		add_action('wp_ajax_save_darb_assabil_payload', array($this, 'handle_save_payload'));
+		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_styles'));
 	}
 
 	/**
@@ -174,43 +177,201 @@ class AdminSettings {
 	 * Render the settings page with tabs
 	 */
 	public function render_settings_page() {
-		$current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'settings'; // Default to 'settings'
+	    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders'; // Changed default to orders
 
-		?>
-		<div class="wrap">
-			<h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-			
-			<!-- Tabs -->
-			<h2 class="nav-tab-wrapper">
-				<a href="?page=darb-assabil-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Settings', 'darb-assabil'); ?>
-				</a>
-				<a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Integration', 'darb-assabil'); ?>
-				</a>
-				<a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e('Webhooks', 'darb-assabil'); ?>
-				</a>
-			</h2>
+	    ?>
+	    <div class="wrap">
+	        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+	        
+	        <!-- Tabs -->
+	        <h2 class="nav-tab-wrapper">
+	            <a href="?page=darb-assabil-settings&tab=orders" class="nav-tab <?php echo $current_tab === 'orders' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Orders', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Settings', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Integration', 'darb-assabil'); ?>
+	            </a>
+	            <a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
+	                <?php esc_html_e('Webhooks', 'darb-assabil'); ?>
+	            </a>
+	        </h2>
 
-			<!-- Tab Content -->
-			<?php if ($current_tab === 'webhooks'): ?>
-				<?php $this->render_webhook_tab(); ?>
-			<?php else: ?>
-				<form action="options.php" method="post">
-					<?php
-					if ($current_tab === 'settings') {
-						settings_fields('darb_assabil_options');
-						do_settings_sections('darb-assabil-settings');
-						submit_button();
-					} elseif ($current_tab === 'integration') { // Ensure lowercase 'integration'
-						$this->render_integrate_tab();
-					}
-					?>
-				</form>
-			<?php endif; ?>
-		</div>
-		<?php
+	        <!-- Tab Content -->
+	        <?php if ($current_tab === 'webhooks'): ?>
+	            <?php $this->render_webhook_tab(); ?>
+	        <?php elseif ($current_tab === 'orders'): ?>
+	            <?php $this->render_orders_tab(); ?>
+	        <?php else: ?>
+	            <form action="options.php" method="post">
+	                <?php
+	                if ($current_tab === 'settings') {
+	                    settings_fields('darb_assabil_options');
+	                    do_settings_sections('darb-assabil-settings');
+	                    submit_button();
+	                } elseif ($current_tab === 'integration') {
+	                    $this->render_integrate_tab();
+	                }
+	                ?>
+	            </form>
+	        <?php endif; ?>
+	    </div>
+	    <?php
+	}
+
+	/**
+	 * Render the Orders tab content
+	 */
+	private function render_orders_tab() {
+	    // Get all orders with Darb Assabil metadata
+		$args = array(
+			'post_type' => 'shop_order',
+			'posts_per_page' => -1,
+			'post_status' => 'any',
+			'meta_query' => array(
+				'relation' => 'OR',
+				array(
+					'key' => '_darb_assabil_processed',
+					'compare' => 'EXISTS',
+				),
+				array(
+					'key' => 'darb_assabil_api_status',
+					'compare' => 'EXISTS',
+				)
+			),
+		);
+
+	    $orders = wc_get_orders($args);
+		$this->log('Orders retrieved with meta query: ' . print_r($orders, true));
+	    ?>
+	    <div class="darb-assabil-orders wrap">
+	        <h2><?php esc_html_e('Darb Assabil Orders', 'darb-assabil'); ?></h2>
+	        
+	        <div class="tablenav top">
+	            <div class="alignleft actions bulkactions">
+	                <select name="bulk-action">
+	                    <option value="-1"><?php esc_html_e('Bulk Actions', 'darb-assabil'); ?></option>
+	                    <option value="retry"><?php esc_html_e('Retry Selected', 'darb-assabil'); ?></option>
+	                </select>
+	                <input type="submit" class="button action" id="doaction" value="<?php esc_html_e('Apply', 'darb-assabil'); ?>">
+	            </div>
+	        </div>
+
+	        <table class="widefat fixed striped">
+	            <thead>
+	                <tr>
+	                    <td class="manage-column column-cb check-column">
+	                        <input type="checkbox" id="cb-select-all-1">
+	                    </td>
+	                    <th><?php esc_html_e('Order ID', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Date', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Status', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Darb Status', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Tracking Number', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('API Payload', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('API Response', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Actions', 'darb-assabil'); ?></th>
+	                </tr>
+	            </thead>
+	            <tbody>
+	                <?php if (empty($orders)) : ?>
+	                    <tr>
+	                        <td colspan="10"><?php esc_html_e('No orders found.', 'darb-assabil'); ?></td>
+	                    </tr>
+	                <?php else : ?>
+	                    <?php foreach ($orders as $order) : 
+						    $darb_status = $order->get_meta('darb_assabil_api_status');
+						    $show_checkbox = ($darb_status !== 'success');
+						?>
+	                        <tr data-order-id="<?php echo esc_attr($order->get_id()); ?>">
+	                            <th scope="row" class="check-column">
+	                                <?php if ($show_checkbox) : ?>
+	                                    <input type="checkbox" name="order[]" value="<?php echo esc_attr($order->get_id()); ?>">
+	                                <?php endif; ?>
+	                            </th>
+	                            <td>
+	                                <a href="<?php echo esc_url(get_edit_post_link($order->get_id())); ?>">
+	                                    #<?php echo esc_html($order->get_order_number()); ?>
+	                                </a>
+	                            </td>
+	                            <td><?php echo esc_html($order->get_date_created()->date_i18n(get_option('date_format') . ' ' . get_option('time_format'))); ?></td>
+	                            <td>
+	                                <span class="order-status status-<?php echo esc_attr($order->get_status()); ?>">
+	                                    <?php echo esc_html(wc_get_order_status_name($order->get_status())); ?>
+	                                </span>
+	                            </td>
+	                            <td>
+	                                <?php
+	                                $darb_status = $order->get_meta('darb_assabil_api_status');
+	                                $status_class = $darb_status === 'success' ? 'success' : ($darb_status === 'failed' ? 'failed' : 'unknown');
+	                                ?>
+	                                <span class="darb-status <?php echo esc_attr($status_class); ?>">
+	                                    <?php echo $darb_status ? esc_html($darb_status) : esc_html__('Not Processed', 'darb-assabil'); ?>
+	                                </span>
+	                            </td>
+	                            <td>
+	                                <?php
+	                                $tracking_number = $order->get_meta('darb_assabil_tracking_number');
+	                                echo $tracking_number ? esc_html($tracking_number) : '-';
+	                                ?>
+	                            </td>
+	                            <td>
+									<?php
+									$payload = $order->get_meta('darb_assabil_api_payload');
+									if ($payload) {
+										// Ensure proper JSON encoding
+										$json_payload = is_array($payload) ? json_encode($payload) : $payload;
+										?>
+										<button class="button view-data" data-type="payload" data-content="<?php echo esc_attr($json_payload); ?>">
+											<?php esc_html_e('View Payload', 'darb-assabil'); ?>
+										</button>
+									<?php } ?>
+								</td>
+								<td>
+									<?php
+									$response = $order->get_meta('darb_assabil_api_response');
+									if ($response) {
+										// Ensure proper JSON encoding
+										$json_response = is_string($response) ? $response : json_encode($response);
+										?>
+										<button class="button view-data" data-type="response" data-content="<?php echo esc_attr($json_response); ?>">
+											<?php esc_html_e('View Response', 'darb-assabil'); ?>
+										</button>
+									<?php } ?>
+								</td>
+	                            <td>
+	                                <?php if ($darb_status === 'failed' || !$darb_status) : ?>
+	                                    <button class="button retry-order" data-order-id="<?php echo esc_attr($order->get_id()); ?>">
+	                                        <?php esc_html_e('Retry', 'darb-assabil'); ?>
+	                                    </button>
+	                                <?php endif; ?>
+	                            </td>
+	                        </tr>
+	                    <?php endforeach; ?>
+	                <?php endif; ?>
+	            </tbody>
+	        </table>
+	    </div>
+	    <!-- Add this modal structure at the end -->
+	    <div id="json-modal" class="modal" style="display:none;">
+	        <div class="modal-content">
+	            <div class="modal-header">
+	                <span class="close">&times;</span>
+	                <h3 class="modal-title">API Data</h3>
+	            </div>
+	            <div class="modal-body">
+	                <textarea id="json-content" class="json-editor"></textarea>
+	            </div>
+	            <div class="modal-footer">
+	                <button type="button" class="button save-json">
+	                    <?php esc_html_e('Save Changes', 'darb-assabil'); ?>
+	                </button>
+	            </div>
+	        </div>
+	    </div>
+	    <?php
 	}
 
 	/**
@@ -524,7 +685,7 @@ class AdminSettings {
 	}
 
 	/**
-	 * Handle webhook request with X-Darb-Signature verification
+	 * Handle webhook request with X-Payload-Signature verification
 	 */
 	public function handle_webhook_request($wp) {
 	    if (!isset($wp->query_vars['darb_assabil_webhook'])) {
@@ -533,9 +694,16 @@ class AdminSettings {
 
 	    // Get payload and headers
 	    $payload = file_get_contents('php://input');
+
+		$this->log('Webhook payload: ' . $payload);
 	    $headers = getallheaders();
-	    $signature = isset($headers['X-Darb-Signature']) ? $headers['X-Darb-Signature'] : '';
+		$this->log('Webhook headers: ' . print_r($headers, true));
+	    $signature = isset($headers['X-Payload-Signature']) ? $headers['X-Payload-Signature'] : '';
 	    
+	    $data = json_decode($payload, true);
+
+		$this->log('Webhook payload after decoding: ' . $data);
+
 	    // Verify signature
 	    if (!$this->verify_webhook_signature($payload, $signature)) {
 	        $this->log('Invalid webhook signature');
@@ -544,7 +712,6 @@ class AdminSettings {
 	    }
 
 	    // Parse payload
-	    $data = json_decode($payload, true);
 	    if (json_last_error() !== JSON_ERROR_NONE || empty($data['event'])) {
 	        $this->log('Invalid webhook payload: ' . json_last_error_msg());
 	        wp_send_json_error('Invalid payload', 400);
@@ -640,13 +807,13 @@ class AdminSettings {
 	            return $this->process_shipment_status_change($data, 'delayed', 'on-hold');
 	            
 	        case 'localShipments.released':
-	            return $this->process_shipment_status_change($data, 'released', 'processing');
+	            return $this->process_shipment_status_change($data, 'released', 'cancelled');
 	            
 	        case 'localShipments.returning':
-	            return $this->process_shipment_status_change($data, 'returning', 'on-hold');
+	            return $this->process_shipment_status_change($data, 'returning', 'cancelled');
 	            
 	        case 'localShipments.returned':
-	            return $this->process_shipment_status_change($data, 'returned', 'failed');
+	            return $this->process_shipment_status_change($data, 'returned', 'cancelled');
 	            
 	        default:
 	            $this->log('Unhandled webhook event: ' . $event);
@@ -659,14 +826,15 @@ class AdminSettings {
 	 */
 	private function process_shipment_status_change($data, $darb_status, $wc_status) {
 	    $payload = $data['payload'];
+		$wc_order_id = $payload['metadata']['order_id'];
 	    
-	    if (empty($payload['orderId'])) {
+	    if (empty($wc_order_id)) {
 	        throw new Exception('Missing order ID in payload');
 	    }
 
-	    $order = wc_get_order($payload['orderId']);
+	    $order = wc_get_order($wc_order_id);
 	    if (!$order) {
-	        throw new Exception('Order not found: ' . $payload['orderId']);
+	        throw new Exception('Order not found: ' . $wc_order_id);
 	    }
 
 	    // Update order status and metadata
@@ -951,86 +1119,139 @@ class AdminSettings {
 	            <?php endif; ?>
 	        </div>
 	    </div>
-	    
-	    <style>
-	        /* Add status colors */
-	        .status-pending { color: #f0ad4e; }
-	        .status-booked { color: #5bc0de; }
-	        .status-processing { color: #0073aa; }
-	        .status-completed { color: #5cb85c; }
-	        .status-cancelled { color: #d9534f; }
-	        .status-delayed { color: #f0ad4e; }
-	        .status-returned { color: #d9534f; }
-	        .webhook-details { margin-top: 10px; }
-	        .response-status {
-		        display: inline-block;
-		        padding: 4px 8px;
-		        border-radius: 3px;
-		        font-weight: 600;
-		    }
-		    
-		    .status-success {
-		        background-color: #dff0d8;
-		        color: #3c763d;
-		        border: 1px solid #d6e9c6;
-		    }
-		    
-		    .status-error {
-		        background-color: #f2dede;
-		        color: #a94442;
-		        border: 1px solid #ebccd1;
-		    }
-		    
-		    .response-message {
-		        max-width: 200px;
-		        overflow: hidden;
-		        text-overflow: ellipsis;
-		        white-space: nowrap;
-		    }
-	    </style>
-	    
-	    <script>
-	    function generateSecret() {
-	        // Generate a random string of 32 characters
-	        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-	        let secret = '';
-	        for (let i = 0; i < 32; i++) {
-	            secret += chars.charAt(Math.floor(Math.random() * chars.length));
-	        }
-	        document.querySelector('input[name="darb_assabil_webhook_secret"]').value = secret;
-	    }
-
-	    function toggleDetails(button) {
-	        const details = button.nextElementSibling;
-	        if (details.style.display === 'none') {
-	            details.style.display = 'block';
-	            button.textContent = '<?php esc_html_e('Hide Details', 'darb-assabil'); ?>';
-	        } else {
-	            details.style.display = 'none';
-	            button.textContent = '<?php esc_html_e('View Details', 'darb-assabil'); ?>';
-	        }
-	    }
-	    </script>
 	    <?php
 	}
 
 	private function verify_webhook_signature($payload, $received_signature) {
-	    // Get API token
-	    $api_token = get_access_token(); // Your stored API token
-		$this->log('API token configured ======' . $api_token);
-	    if (empty($api_token)) {
-	        $this->log('API token not configured');
+	    // Get webhook secret from WordPress options
+	    $webhook_secret = get_plugin_option()['darb_assabil_webhook_secret'];
+	    
+	    $this->log('Webhook secret configured: ' . ($webhook_secret ? 'Yes' : 'No'));
+	    
+	    if (empty($webhook_secret)) {
+	        $this->log('Webhook secret not configured');
+	        return false;
 	    }
 	    
-	    // Calculate signature
-	    $expected_signature = hash_hmac('sha256', $payload, $api_token, false);
+	    // Calculate signature using webhook secret
+	    $expected_signature = hash('sha256', $payload . ":" . $webhook_secret);
 	    
 	    // Log for debugging
 	    $this->log('Payload: ' . $payload);
-	    $this->log('API Token: ' . substr($api_token, 0, 8) . '...');  // Log partial token for security
+	    $this->log('Webhook Secret (first 8 chars): ' . substr($webhook_secret, 0, 8) . '...');
 	    $this->log('Received signature: ' . $received_signature);
 	    $this->log('Expected signature: ' . $expected_signature);
 	    
+	    // Compare signatures using hash_equals to prevent timing attacks
 	    return hash_equals($expected_signature, $received_signature);
+	}
+
+	/**
+	 * Handle retry order AJAX request
+	 */
+	public function handle_retry_order() {
+	    check_ajax_referer('retry-darb-assabil-order', 'nonce');
+
+	    if (!current_user_can('manage_woocommerce')) {
+	        wp_send_json_error('Permission denied');
+	    }
+
+	    $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+	    if (!$order_id) {
+	        wp_send_json_error('Invalid order ID');
+	    }
+
+	    try {
+	        // Get the order handler instance
+	        $order_handler = \DarbAssabil\OrderHandler::get_instance();
+	        
+	        // Process the order
+	        $order_handler->handle_new_order($order_id, null);
+	        
+	        wp_send_json_success();
+	    } catch (Exception $e) {
+	        wp_send_json_error($e->getMessage());
+	    }
+	}
+
+	public function handle_save_payload() {
+	    check_ajax_referer('save-darb-assabil-payload', 'nonce');
+
+	    if (!current_user_can('manage_woocommerce')) {
+	        wp_send_json_error('Permission denied');
+	    }
+
+	    // Get the raw POST data instead of using $_POST
+	    $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+	    $payload = isset($_POST['payload']) ? stripslashes($_POST['payload']) : '';
+
+	    if (!$order_id) {
+	        wp_send_json_error('Invalid order ID');
+	    }
+
+	    if (empty($payload)) {
+	        wp_send_json_error('Empty payload');
+	    }
+
+	    try {
+	        $order = wc_get_order($order_id);
+	        if (!$order) {
+	            throw new Exception('Order not found');
+	        }
+
+	        // Validate JSON
+	        $decoded_payload = json_decode($payload, true);
+	        if (json_last_error() !== JSON_ERROR_NONE) {
+	            throw new Exception('Invalid JSON format: ' . json_last_error_msg());
+	        }
+
+	        // Update the payload
+	        $order->update_meta_data('darb_assabil_api_payload', $decoded_payload);
+	        $order->save();
+
+	        // Log successful update
+	        error_log('Payload saved successfully for order ' . $order_id);
+	        error_log('Payload: ' . print_r($decoded_payload, true));
+
+	        wp_send_json_success('Payload saved successfully');
+	    } catch (Exception $e) {
+	        error_log('Error saving payload: ' . $e->getMessage());
+	        error_log('Order ID: ' . $order_id);
+	        error_log('Raw payload: ' . $payload);
+	        wp_send_json_error($e->getMessage());
+	    }
+	}
+
+	/**
+	 * Enqueue admin styles and scripts
+	 */
+	public function enqueue_admin_styles() {
+	    // Enqueue CSS
+	    wp_enqueue_style(
+	        'darb-assabil-admin',
+	        plugin_dir_url(__DIR__) . 'assets/css/style.css',
+	        array(),
+	        filemtime(plugin_dir_path(__DIR__) . 'assets/css/style.css')
+	    );
+
+	    // Enqueue JavaScript
+	    wp_enqueue_script(
+	        'darb-assabil-admin',
+	        plugin_dir_url(__DIR__) . 'assets/js/admin.js',
+	        array('jquery'),
+	        filemtime(plugin_dir_path(__DIR__) . 'assets/js/admin.js'),
+	        true
+	    );
+
+	    // Localize script with translation strings and nonce
+	    wp_localize_script(
+	        'darb-assabil-admin',
+	        'darbAssabilAdmin',
+	        array(
+	            'payloadNonce' => wp_create_nonce('save-darb-assabil-payload'),
+	            'hideDetailsText' => __('Hide Details', 'darb-assabil'),
+	            'viewDetailsText' => __('View Details', 'darb-assabil')
+	        )
+	    );
 	}
 }

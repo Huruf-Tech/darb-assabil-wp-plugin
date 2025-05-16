@@ -53,7 +53,8 @@ function get_plugin_option() {
     return [
         'service' => get_option('darb_assabil_service_id', ''),
         'include_product_payment' => get_option('darb_assabil_include_product_payment', ''),
-        'payment_done_by_receiver' => get_option('darb_assabil_payment_done_by_receiver', '')
+        'payment_done_by_receiver' => get_option('darb_assabil_payment_done_by_receiver', ''),
+        'darb_assabil_webhook_secret' => get_option('darb_assabil_webhook_secret', ''),
     ];
 }
 
