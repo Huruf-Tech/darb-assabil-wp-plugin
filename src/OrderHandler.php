@@ -66,9 +66,21 @@ class OrderHandler {
 				throw new \Exception("Failed to fetch order with ID: {$order_id}");
 			}
 
+			// Early check for Libya orders
+			$shipping_country = $order->get_shipping_country();
+			if ($shipping_country !== 'LY') {
+				$this->log("Order #{$order_id} skipped - Not for Libya (Country: {$shipping_country})");
+				return;
+			}
+
 			// Check if order was already processed
 			$processed = get_post_meta($order_id, '_darb_assabil_processed', true);
-			$this->log("Order #{$order_id} processed status: " . ($processed ? 'Yes' : 'No'));
+			if ($processed) {
+				$this->log("Order #{$order_id} already processed, skipping");
+				return;
+			}
+
+			$this->log("Order #{$order_id} is for Libya, processing...");
 
 			$order_data = $this->prepare_order_data($order);
 			$this->log("Prepared order data for #{$order_id}: " . print_r($order_data, true));
@@ -142,7 +154,7 @@ class OrderHandler {
 				})(),
 				'paymentBy'    => get_plugin_option()['payment_done_by_receiver'] === true ? 'receiver' : 'sender',
 				'to' => array(
-					'countryCode'   => 'lby',
+					'countryCode'   => 'lby22',
 					'city'      => $city_area['city'],
 					'area'      => $city_area['area'],
 					'address'  => $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2(),
@@ -162,7 +174,7 @@ class OrderHandler {
 	 * @param array $order_data Order data to send.
 	 * @throws \Exception If API request fails.
 	 */
-	private function create_order( $order_data ) {
+	public function create_order( $order_data ) {
 		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/create';
 		
 		$this->log("API Settings - Endpoint: {$api_url}");
@@ -204,7 +216,7 @@ class OrderHandler {
 		$order_id = $order_data['order']['metadata']['order_id'];
 		$order = wc_get_order($order_id);
 		
-		$this->log('order : ' . print_r($order, true));
+		// $this->log('order : ' . print_r($order, true));
 		if ($response_data && isset($response_data['status'])) {
 			$order->update_meta_data('darb_assabil_api_payload', $order_data);
 			$order->update_meta_data('darb_assabil_api_status', $response_data['status'] ? 'success' : 'failed');
@@ -222,7 +234,7 @@ class OrderHandler {
 		$this->log("API Response saved to order meta");
 
 		if ($response_code !== 200 ) {
-			throw new \Exception( "API returned non-200 status code: {$response_code}" );
+			throw new \Exception( "Order creation failed with status code: {$response_code}" );
 		}
 	}
 

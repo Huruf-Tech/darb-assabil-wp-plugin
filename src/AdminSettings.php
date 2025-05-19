@@ -244,9 +244,9 @@ class AdminSettings {
 		);
 
 	    $orders = wc_get_orders($args);
-		$this->log('Orders retrieved with meta query: ' . print_r($orders, true));
+		// $this->log('Orders retrieved with meta query: ' . print_r($orders, true));
 	    ?>
-	    <div class="darb-assabil-orders wrap">
+	    <div class="darb-assabil-admin wrap">
 	        <h2><?php esc_html_e('Darb Assabil Orders', 'darb-assabil'); ?></h2>
 	        
 	        <div class="tablenav top">
@@ -269,7 +269,7 @@ class AdminSettings {
 	                    <th><?php esc_html_e('Date', 'darb-assabil'); ?></th>
 	                    <th><?php esc_html_e('Status', 'darb-assabil'); ?></th>
 	                    <th><?php esc_html_e('Darb Status', 'darb-assabil'); ?></th>
-	                    <th><?php esc_html_e('Tracking Number', 'darb-assabil'); ?></th>
+	                    <th><?php esc_html_e('Reference Number', 'darb-assabil'); ?></th>
 	                    <th><?php esc_html_e('API Payload', 'darb-assabil'); ?></th>
 	                    <th><?php esc_html_e('API Response', 'darb-assabil'); ?></th>
 	                    <th><?php esc_html_e('Actions', 'darb-assabil'); ?></th>
@@ -298,7 +298,7 @@ class AdminSettings {
 	                            </td>
 	                            <td><?php echo esc_html($order->get_date_created()->date_i18n(get_option('date_format') . ' ' . get_option('time_format'))); ?></td>
 	                            <td>
-	                                <span class="order-status status-<?php echo esc_attr($order->get_status()); ?>">
+	                                <span class="darb-order-status darb-status-<?php echo esc_attr($order->get_status()); ?>">
 	                                    <?php echo esc_html(wc_get_order_status_name($order->get_status())); ?>
 	                                </span>
 	                            </td>
@@ -343,7 +343,9 @@ class AdminSettings {
 								</td>
 	                            <td>
 	                                <?php if ($darb_status === 'failed' || !$darb_status) : ?>
-	                                    <button class="button retry-order" data-order-id="<?php echo esc_attr($order->get_id()); ?>">
+	                                    <button type="button" class="button retry-order" 
+	                                            data-order-id="<?php echo esc_attr($order->get_id()); ?>"
+	                                            data-nonce="<?php echo wp_create_nonce('retry-darb-assabil-order'); ?>">
 	                                        <?php esc_html_e('Retry', 'darb-assabil'); ?>
 	                                    </button>
 	                                <?php endif; ?>
@@ -355,20 +357,28 @@ class AdminSettings {
 	        </table>
 	    </div>
 	    <!-- Add this modal structure at the end -->
-	    <div id="json-modal" class="modal" style="display:none;">
-	        <div class="modal-content">
-	            <div class="modal-header">
-	                <span class="close">&times;</span>
-	                <h3 class="modal-title">API Data</h3>
+	    <div id="json-modal" class="darb-modal" style="display:none;">
+	        <div class="darb-modal-content">
+	            <div class="darb-modal-header">
+	                <span class="darb-close">&times;</span>
+	                <h3 class="darb-modal-title">API Data</h3>
 	            </div>
-	            <div class="modal-body">
-	                <textarea id="json-content" class="json-editor"></textarea>
+	            <div class="darb-modal-body">
+	                <textarea id="json-content" class="darb-json-editor"></textarea>
 	            </div>
-	            <div class="modal-footer">
+	            <div class="darb-modal-footer">
 	                <button type="button" class="button save-json">
 	                    <?php esc_html_e('Save Changes', 'darb-assabil'); ?>
 	                </button>
 	            </div>
+	        </div>
+	    </div>
+	    <!-- Add this after your existing modal -->
+	    <div class="darb-loader-overlay">
+	        <div class="darb-loader">
+	            <div class="darb-loader-spinner"></div>
+	            <div class="darb-loader-text">Processing orders...</div>
+	            <div class="darb-loader-progress"></div>
 	        </div>
 	    </div>
 	    <?php
@@ -1157,20 +1167,57 @@ class AdminSettings {
 	    }
 
 	    $order_id = isset($_POST['order_id']) ? intval($_POST['order_id']) : 0;
+	    $is_bulk = isset($_POST['is_bulk']) ? (bool)$_POST['is_bulk'] : false;
+
 	    if (!$order_id) {
 	        wp_send_json_error('Invalid order ID');
 	    }
 
 	    try {
+	        // Get the order
+	        $order = wc_get_order($order_id);
+	        if (!$order) {
+	            throw new Exception('Order not found');
+	        }
+
+	        // Get saved payload
+	        $saved_payload = $order->get_meta('darb_assabil_api_payload');
+			$this->log('Saved payload: ' . print_r($saved_payload, true));
+
+	        
+	        // Reset processed flags
+	        delete_post_meta($order_id, '_darb_assabil_processed');
+	        delete_post_meta($order_id, '_darb_assabil_error');
+	        delete_post_meta($order_id, 'darb_assabil_api_status');
+	        delete_post_meta($order_id, 'darb_assabil_api_response');
+	        
 	        // Get the order handler instance
 	        $order_handler = \DarbAssabil\OrderHandler::get_instance();
 	        
-	        // Process the order
-	        $order_handler->handle_new_order($order_id, null);
+	        if ($saved_payload) {
+	            // Use saved payload if available
+	            $order_handler->create_order($saved_payload);
+	        } else {
+	            // Fallback to generating new payload
+	            $order_handler->handle_new_order($order_id, $order);
+	        }
+
+	        // Check if the API call was successful
+	        $api_status = $order->get_meta('darb_assabil_api_status');
 	        
-	        wp_send_json_success();
+	        if ($api_status === 'failed') {
+	            $api_message = $order->get_meta('darb_assabil_api_message');
+	            throw new Exception('API call failed: ' . $api_message);
+	        }
+
+	        if ($is_bulk) {
+	            wp_send_json_success("Order #{$order_id} retried successfully");
+	        } else {
+	            wp_send_json_success('Order successfully retried');
+	        }
 	    } catch (Exception $e) {
-	        wp_send_json_error($e->getMessage());
+	        $this->log('Retry Error: ' . $e->getMessage());
+	        wp_send_json_error('Order retry failed: ' . $e->getMessage());
 	    }
 	}
 
@@ -1226,6 +1273,12 @@ class AdminSettings {
 	 * Enqueue admin styles and scripts
 	 */
 	public function enqueue_admin_styles() {
+	    // Only load on our plugin pages
+	    $screen = get_current_screen();
+	    if (!$screen || $screen->id !== 'toplevel_page_darb-assabil-settings') {
+	        return;
+	    }
+
 	    // Enqueue CSS
 	    wp_enqueue_style(
 	        'darb-assabil-admin',
@@ -1243,12 +1296,13 @@ class AdminSettings {
 	        true
 	    );
 
-	    // Localize script with translation strings and nonce
+	    // Localize script
 	    wp_localize_script(
 	        'darb-assabil-admin',
 	        'darbAssabilAdmin',
 	        array(
 	            'payloadNonce' => wp_create_nonce('save-darb-assabil-payload'),
+	            'retryNonce' => wp_create_nonce('retry-darb-assabil-order'),
 	            'hideDetailsText' => __('Hide Details', 'darb-assabil'),
 	            'viewDetailsText' => __('View Details', 'darb-assabil')
 	        )

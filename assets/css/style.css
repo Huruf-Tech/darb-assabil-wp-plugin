@@ -1,151 +1,314 @@
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 99999;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    padding: 0;
-}
+/* Only apply styles to our plugin's admin page */
+.toplevel_page_darb-assabil-settings {
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 99999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        padding: 0;
+    }
 
-.modal.show {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-}
+    .modal.show {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
 
-.modal-content {
-    background-color: #fefefe;
-    padding: 0;
-    border: 1px solid #888;
-    width: 90%;
-    max-width: 800px;
-    max-height: calc(100vh - 100px);
-    border-radius: 4px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    display: flex;
-    flex-direction: column;
-    margin: 32px auto 0;
-}
+    .modal-content {
+        background-color: #fefefe;
+        padding: 0;
+        border: 1px solid #888;
+        width: 90%;
+        max-width: 800px;
+        max-height: calc(100vh - 100px);
+        border-radius: 4px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        margin: 32px auto 0;
+    }
 
-.modal-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-}
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
 
-/* ... rest of your existing modal styles ... */
+    .modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #ddd;
+        background: #f8f8f8;
+        border-radius: 4px 4px 0 0;
+    }
 
-.modal-header {
-    padding: 15px 20px;
-    border-bottom: 1px solid #ddd;
-    background: #f8f8f8;
-    border-radius: 4px 4px 0 0;
-}
+    .modal-header h3 {
+        margin: 0;
+        display: inline-block;
+    }
 
-.modal-header h3 {
-    margin: 0;
-    display: inline-block;
-}
+    .modal-footer {
+        padding: 15px 20px;
+        border-top: 1px solid #ddd;
+        background: #f8f8f8;
+        text-align: right;
+        border-radius: 0 0 4px 4px;
+    }
 
-.modal-footer {
-    padding: 15px 20px;
-    border-top: 1px solid #ddd;
-    background: #f8f8f8;
-    text-align: right;
-    border-radius: 0 0 4px 4px;
-}
+    .json-editor {
+        width: 100%;
+        height: 400px;
+        font-family: monospace;
+        font-size: 13px;
+        line-height: 1.4;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+    }
 
-.json-editor {
-    width: 100%;
-    height: 400px;
-    font-family: monospace;
-    font-size: 13px;
-    line-height: 1.4;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    resize: vertical;
-}
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: -5px;
+    }
 
-.close {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    margin-top: -5px;
-}
+    .close:hover {
+        color: #000;
+    }
 
-.close:hover {
-    color: #000;
-}
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
 
-pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
+    /* Order Status Colors */
+    .order-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
 
-/* Order Status Colors */
-.order-status {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-weight: 600;
-}
+    .status-processing { background: #c6e1c6; color: #5b841b; }
+    .status-completed { background: #c8d7e1; color: #2e4453; }
+    .status-on-hold { background: #f8dda7; color: #94660c; }
+    .status-failed { background: #eba3a3; color: #761919; }
+    .status-cancelled { background: #e5e5e5; color: #777; }
+    .status-pending { color: #f0ad4e; }
+    .status-booked { color: #5bc0de; }
+    .status-delayed { color: #f0ad4e; }
+    .status-returned { color: #d9534f; }
 
-.status-processing { background: #c6e1c6; color: #5b841b; }
-.status-completed { background: #c8d7e1; color: #2e4453; }
-.status-on-hold { background: #f8dda7; color: #94660c; }
-.status-failed { background: #eba3a3; color: #761919; }
-.status-cancelled { background: #e5e5e5; color: #777; }
-.status-pending { color: #f0ad4e; }
-.status-booked { color: #5bc0de; }
-.status-delayed { color: #f0ad4e; }
-.status-returned { color: #d9534f; }
+    /* Darb Status Colors */
+    .darb-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
 
-/* Darb Status Colors */
-.darb-status {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-weight: 600;
-}
+    .darb-status.success { background: #c6e1c6; color: #5b841b; }
+    .darb-status.failed { background: #eba3a3; color: #761919; }
+    .darb-status.unknown { background: #e5e5e5; color: #777; }
 
-.darb-status.success { background: #c6e1c6; color: #5b841b; }
-.darb-status.failed { background: #eba3a3; color: #761919; }
-.darb-status.unknown { background: #e5e5e5; color: #777; }
+    /* Response Status */
+    .response-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
 
-/* Response Status */
-.response-status {
-    display: inline-block;
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-weight: 600;
-}
+    .status-success {
+        background-color: #dff0d8;
+        color: #3c763d;
+        border: 1px solid #d6e9c6;
+    }
 
-.status-success {
-    background-color: #dff0d8;
-    color: #3c763d;
-    border: 1px solid #d6e9c6;
-}
+    .status-error {
+        background-color: #f2dede;
+        color: #a94442;
+        border: 1px solid #ebccd1;
+    }
 
-.status-error {
-    background-color: #f2dede;
-    color: #a94442;
-    border: 1px solid #ebccd1;
-}
+    .response-message {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 
-.response-message {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
+    .webhook-details { 
+        margin-top: 10px; 
+    }
 
-.webhook-details { 
-    margin-top: 10px; 
+    /* Loader Styles */
+    .darb-loader-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999999;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .darb-loader {
+        background: white;
+        padding: 20px;
+        border-radius: 5px;
+        text-align: center;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .darb-loader-spinner {
+        border: 4px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 4px solid #0073aa;
+        width: 40px;
+        height: 40px;
+        margin: 0 auto 10px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* Modal Styles */
+    .darb-modal {
+        display: none;
+        position: fixed;
+        z-index: 99999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100vh;
+        background-color: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .darb-modal.show {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .darb-modal-content {
+        background-color: #fefefe;
+        width: 90%;
+        max-width: 800px;
+        max-height: 90vh;
+        border-radius: 4px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .darb-modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 200px;
+        max-height: calc(90vh - 130px);
+    }
+
+    .darb-modal-header {
+        padding: 15px 20px;
+        border-bottom: 1px solid #ddd;
+        background: #f8f8f8;
+        border-radius: 4px 4px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .darb-modal-header h3 {
+        margin: 0;
+        display: inline-block;
+    }
+
+    .darb-modal-footer {
+        padding: 15px 20px;
+        border-top: 1px solid #ddd;
+        background: #f8f8f8;
+        text-align: right;
+        border-radius: 0 0 4px 4px;
+    }
+
+    .darb-modal-title {
+        margin: 0;
+        font-size: 1.3em;
+        font-weight: 600;
+    }
+
+    .darb-close {
+        color: #aaa;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 1;
+        padding: 0 5px;
+    }
+
+    .darb-close:hover {
+        color: #000;
+    }
+
+    .darb-json-editor {
+        width: 100%;
+        height: 100%;
+        min-height: 300px;
+        font-family: monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        resize: vertical;
+        white-space: pre;
+        tab-size: 2;
+    }
+
+    /* Additional styles for better JSON visibility */
+    .darb-json-editor:focus {
+        outline: none;
+        border-color: #2271b1;
+        box-shadow: 0 0 0 1px #2271b1;
+    }
+
+    /* Specific to Darb Assabil plugin */
+    .darb-order-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    .darb-status-processing { background: #c6e1c6; color: #5b841b; }
+    .darb-status-completed { background: #c8d7e1; color: #2e4453; }
+    .darb-status-on-hold { background: #f8dda7; color: #94660c; }
+    .darb-status-failed { background: #eba3a3; color: #761919; }
+    .darb-status-cancelled { background: #e5e5e5; color: #777; }
+    .darb-status-pending { color: #f0ad4e; }
+    .darb-status-booked { color: #5bc0de; }
+    .darb-status-delayed { color: #f0ad4e; }
+    .darb-status-returned { color: #d9534f; }
 }
