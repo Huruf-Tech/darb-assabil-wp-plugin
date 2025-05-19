@@ -191,20 +191,9 @@ class Checkout {
 			wp_send_json_error('City or area not provided');
 		}
 		$city = sanitize_text_field($_POST['city']);
-		
-		// Use a standalone logging function
-		// $this->log('City: ' . $city);
 	
 		// Optionally, store the city in the session for later use
 		WC()->session->set('selected_city', $city);
-
-		// $this->log(print_r(WC()->cart));
-	
-		// Trigger WooCommerce to recalculate shipping rates
-
-		// ShippingMethod::get_instance()->calculate_shipping();
-		// WC()->cart->calculate_shipping();
-		// WC()->cart->calculate_totals();
 	
 		wp_send_json_success('Shipping rate updated');
 	}

@@ -101,10 +101,6 @@ class ShippingMethod extends \WC_Shipping_Method {
 			];
 		}
 
-		// $this->log('Extracted products: ' . print_r($products, true));
-
-		// $this->log('Shipping details: ' . $this->get_rate_id());
-
 		$rate = [
 			'id' => $this->get_rate_id(),
 			'label' => $this->title,
@@ -114,10 +110,6 @@ class ShippingMethod extends \WC_Shipping_Method {
 
 		if ($use_api) {
 			$city_area = extract_city_and_area($package['destination']['city']);
-
-			$this->log('City: ' . $city_area['city']);
-			$this->log('Area: ' . $city_area['area']);
-
 		// Prepare payload for the API request
 		$payload = [
 			'service' => get_plugin_option()['service'],
@@ -136,12 +128,9 @@ class ShippingMethod extends \WC_Shipping_Method {
 
 			// Call the external API
 			$response = $this->call_shipping_api($payload);
-			$this->log('API Response: ' . print_r($response, true));
 			if (!is_wp_error($response) && isset($response['data']['amount'])) {
 				$rate['cost'] = $response['data']['amount'];
 				$rate['label'] = $response['label'] ?? $this->title;
-			} else {
-				$this->log('Darb Assabil API Error: ' . (is_wp_error($response) ? $response->get_error_message() : 'Invalid response'));
 			}
 		}
 
@@ -163,10 +152,7 @@ class ShippingMethod extends \WC_Shipping_Method {
 		];
 
 		$response = wp_remote_post($api_url, $args);
-		$this->log('API Responsessssssssssssssssssssssssssss: ' . print_r($response, true));
-
 		if (is_wp_error($response)) {
-			$this->log('API Request Error: ' . $response->get_error_message());
 			return $response;
 		}
 

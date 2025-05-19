@@ -4,5 +4,5 @@
  */
 
 return [
-    'server_base_url' => 'http://localhost:3742',
+    'server_base_url' => 'https://darb-assabil-service-api.huruftech.com',
 ];
