@@ -36,10 +36,6 @@ jQuery(document).ready(function($) {
             // Show modal
             $modal.css('display', 'block');
 
-            // Debug logging
-            console.log('Current Order ID:', currentOrderId);
-            console.log('Current Type:', currentType);
-            console.log('Content:', content);
         } catch (e) {
             console.error('Error parsing JSON:', e);
             console.log('Content:', content);
@@ -52,12 +48,6 @@ jQuery(document).ready(function($) {
         try {
             // Validate JSON
             var jsonContent = $('#json-content').val();
-            var newPayload = JSON.parse(jsonContent);
-
-            console.log('JSON:', jsonContent);
-            console.log('Parsed JSON:', newPayload);
-            console.log('Current Order ID:', currentOrderId);
-            console.log('Current Type:', currentType);
             
             // Save changes via AJAX
             $.ajax({

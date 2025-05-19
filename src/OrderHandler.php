@@ -55,8 +55,6 @@ class OrderHandler {
 	 * @param \WC_Order|null $order    Order object.
 	 */
 	public function handle_new_order($order_id, $order) {
-		$this->log("Processing new order #{$order_id}");
-		
 		try {
 			if (!$order instanceof \WC_Order) {
 				$order = wc_get_order($order_id);
@@ -69,28 +67,19 @@ class OrderHandler {
 			// Early check for Libya orders
 			$shipping_country = $order->get_shipping_country();
 			if ($shipping_country !== 'LY') {
-				$this->log("Order #{$order_id} skipped - Not for Libya (Country: {$shipping_country})");
 				return;
 			}
 
 			// Check if order was already processed
 			$processed = get_post_meta($order_id, '_darb_assabil_processed', true);
 			if ($processed) {
-				$this->log("Order #{$order_id} already processed, skipping");
 				return;
 			}
-
-			$this->log("Order #{$order_id} is for Libya, processing...");
-
 			$order_data = $this->prepare_order_data($order);
-			$this->log("Prepared order data for #{$order_id}: " . print_r($order_data, true));
-			
 			$this->create_order($order_data);
-			$this->log("Successfully sent order #{$order_id} to API");
 
 			// Save processed status
 			update_post_meta($order_id, '_darb_assabil_processed', 'yes');
-			$this->log("Marked order #{$order_id} as processed");
 
 			// Save additional metadata for tracking
 			$order->update_meta_data('_darb_assabil_processed_date', current_time('mysql'));
@@ -98,15 +87,9 @@ class OrderHandler {
 			$order->save();
 
 		} catch (\Exception $e) {
-			$this->log('Order Error: ' . $e->getMessage());
-			
 			// Save error state
 			update_post_meta($order_id, '_darb_assabil_error', $e->getMessage());
 			update_post_meta($order_id, '_darb_assabil_error_date', current_time('mysql'));
-			
-			if ($this->settings->get_option('debug_mode')) {
-				$this->log('Debug: ' . $e->getTraceAsString());
-			}
 		}
 	}
 
@@ -120,9 +103,6 @@ class OrderHandler {
 		$include_product_payment = get_plugin_option()['include_product_payment'];
 
 		$city_area = extract_city_and_area($order->get_billing_city());
-
-		$this->log('City: ' . $city);
-		$this->log('Area: ' . $area);
 
 		return array(
 			'order' => array(
@@ -177,8 +157,6 @@ class OrderHandler {
 	public function create_order( $order_data ) {
 		$api_url = get_config('server_base_url') . '/api/darb/assabil/order/create';
 		
-		$this->log("API Settings - Endpoint: {$api_url}");
-		
 		if (empty($api_url)) {
 			throw new \Exception('API endpoint is not configured');
 		}
@@ -193,30 +171,19 @@ class OrderHandler {
 			'timeout'     => 15,
 		);
 
-		$this->log("API request args: " . print_r($args, true));
-
 		$response = wp_remote_post($api_url, $args );
-
-		// $this->log("API Response: " . print_r($response, true));
-
 		if ( is_wp_error( $response ) ) {
-			$this->log("API Error: " . $response->get_error_message());
 			throw new \Exception( 'API Error: ' . $response->get_error_message() );
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
 		$response_body = wp_remote_retrieve_body( $response );
 		$response_data = json_decode($response_body, true);
-		
-		$this->log("API Response Code: {$response_code}");
-		$this->log("API Response Body: {$response_body}");
-		$this->log("API Response Data: " . print_r($response_data, true));
 
 		// Store the API response status
 		$order_id = $order_data['order']['metadata']['order_id'];
 		$order = wc_get_order($order_id);
 		
-		// $this->log('order : ' . print_r($order, true));
 		if ($response_data && isset($response_data['status'])) {
 			$order->update_meta_data('darb_assabil_api_payload', $order_data);
 			$order->update_meta_data('darb_assabil_api_status', $response_data['status'] ? 'success' : 'failed');
@@ -231,7 +198,6 @@ class OrderHandler {
 
 		$order->update_meta_data('darb_assabil_api_response', $response_body);
 		$order->save();
-		$this->log("API Response saved to order meta");
 
 		if ($response_code !== 200 ) {
 			throw new \Exception( "Order creation failed with status code: {$response_code}" );

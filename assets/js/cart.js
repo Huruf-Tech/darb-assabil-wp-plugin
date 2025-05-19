@@ -11,7 +11,6 @@ jQuery(document).ready(function($) {
      */
     function removeElement(selector, hide = false) {
         if ($(selector).length) {
-            console.log('Removing element(s): ' + selector);
             if (hide) {
                 $(selector).hide();
             } else {
@@ -19,14 +18,12 @@ jQuery(document).ready(function($) {
             }
             return true;
         } else {
-            console.log('Element not found: ' + selector);
             return false;
         }
     }
     
     // Check if we're on the cart page
     if ($('body').hasClass('woocommerce-cart') || window.location.href.indexOf('/cart') > -1) {
-        console.log('Darb Assabil: Cart page detected, removing shipping elements');
         
         // Remove the shipping row from the cart totals table
         removeElement('tr.woocommerce-shipping-totals.shipping');

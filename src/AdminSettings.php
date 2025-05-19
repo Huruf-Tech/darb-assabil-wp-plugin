@@ -244,7 +244,6 @@ class AdminSettings {
 		);
 
 	    $orders = wc_get_orders($args);
-		// $this->log('Orders retrieved with meta query: ' . print_r($orders, true));
 	    ?>
 	    <div class="darb-assabil-admin wrap">
 	        <h2><?php esc_html_e('Darb Assabil Orders', 'darb-assabil'); ?></h2>
@@ -426,9 +425,6 @@ class AdminSettings {
 	    );
 	    $response = wp_remote_post($api_url, $args);
 
-	    $this->log('API login request: ' . print_r($args, true));
-	    $this->log('API login response: ' . print_r($response, true));
-
 	    if (is_wp_error($response)) {
 	        $error_message = __('Failed to connect to the API. Please try again later.', 'darb-assabil');
 	    } else {
@@ -556,10 +552,7 @@ class AdminSettings {
 	 */
 	public function service_dropdown_callback() {
 		$selected_service = get_option('darb_assabil_service_id', '');
-		$this->log('Selected service ID: ' . $selected_service);
 		$services = $this->get_services();
-
-		$this->log('Available services: ' . print_r($services, true));
 		
 		echo '<select name="darb_assabil_service_id" id="darb_assabil_service_id">';
 		echo '<option value="">' . __('Select a service', 'darb-assabil') . '</option>';
@@ -593,16 +586,12 @@ class AdminSettings {
 	    );
 
 		$response = wp_remote_post($api_url, $args);
-		$this->log('API response: ' . print_r($response, true));
 	    if (is_wp_error($response)) {
-	        error_log('Darb Assabil API Error: ' . $response->get_error_message());
 	        return array();
 	    }
 
 	    $body = wp_remote_retrieve_body($response);
 	    $data = json_decode($body, true);
-
-	    $this->log('API Response: ' . print_r($data, true));
 
 	    if (!empty($data['data'])) {
 	        return $data['data'];
@@ -701,29 +690,20 @@ class AdminSettings {
 	    if (!isset($wp->query_vars['darb_assabil_webhook'])) {
 	        return;
 	    }
-
 	    // Get payload and headers
 	    $payload = file_get_contents('php://input');
-
-		$this->log('Webhook payload: ' . $payload);
 	    $headers = getallheaders();
-		$this->log('Webhook headers: ' . print_r($headers, true));
 	    $signature = isset($headers['X-Payload-Signature']) ? $headers['X-Payload-Signature'] : '';
 	    
 	    $data = json_decode($payload, true);
-
-		$this->log('Webhook payload after decoding: ' . $data);
-
 	    // Verify signature
 	    if (!$this->verify_webhook_signature($payload, $signature)) {
-	        $this->log('Invalid webhook signature');
 	        wp_send_json_error('Invalid signature', 403);
 	        exit;
 	    }
 
 	    // Parse payload
 	    if (json_last_error() !== JSON_ERROR_NONE || empty($data['event'])) {
-	        $this->log('Invalid webhook payload: ' . json_last_error_msg());
 	        wp_send_json_error('Invalid payload', 400);
 	        exit;
 	    }
@@ -774,8 +754,6 @@ class AdminSettings {
 	        array_unshift($webhook_logs, $webhook_data);
 	        $webhook_logs = array_slice($webhook_logs, 0, 50);
 	        update_option('darb_assabil_webhook_logs', $webhook_logs);
-
-	        $this->log('Webhook processing error: ' . $e->getMessage());
 	        wp_send_json_error($e->getMessage(), 500);
 	    }
 	    exit;
@@ -788,9 +766,6 @@ class AdminSettings {
 	    if (empty($data['requestId']) || empty($data['webhookId']) || empty($data['account'])) {
 	        throw new Exception('Invalid webhook data structure');
 	    }
-
-	    $this->log('Processing webhook: ' . $event . ' for request: ' . $data['requestId']);
-
 	    switch ($event) {
 	        case 'localShipments.pending':
 	            return $this->process_shipment_status_change($data, 'pending', 'on-hold');
@@ -826,7 +801,6 @@ class AdminSettings {
 	            return $this->process_shipment_status_change($data, 'returned', 'cancelled');
 	            
 	        default:
-	            $this->log('Unhandled webhook event: ' . $event);
 	            return false;
 	    }
 	}
@@ -899,7 +873,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_order_created', $data);
-	    $this->log('Order created: ' . $data['order_id']);
 	}
 
 	/**
@@ -911,7 +884,6 @@ class AdminSettings {
 	    }
 	    
 	    // Add your order update logic here
-	    $this->log('Processing order update: ' . $data['order_id']);
 	    do_action('darb_assabil_webhook_order_updated', $data);
 	}
 
@@ -930,7 +902,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_order_cancelled', $data);
-	    $this->log('Order cancelled: ' . $data['order_id']);
 	}
 
 	/**
@@ -949,7 +920,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_shipment_created', $data);
-	    $this->log('Shipment created: ' . $data['shipment_id']);
 	}
 
 	/**
@@ -961,8 +931,7 @@ class AdminSettings {
 	    }
 	    
 	    // Add your shipment status update logic here
-	    $this->log('Processing shipment status: ' . $data['shipment_id'] . ' - ' . $data['status']);
-	    do_action('darb_assabil_webhook_shipment_status', $data);
+		do_action('darb_assabil_webhook_shipment_status', $data);
 	}
 
 	/**
@@ -981,7 +950,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_shipment_delivered', $data);
-	    $this->log('Shipment delivered: ' . $data['shipment_id']);
 	}
 
 	/**
@@ -1004,7 +972,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_payment_received', $data);
-	    $this->log('Payment received for order: ' . $data['order_id']);
 	}
 
 	/**
@@ -1021,7 +988,6 @@ class AdminSettings {
 	    }
 	    
 	    do_action('darb_assabil_webhook_payment_failed', $data);
-	    $this->log('Payment failed for order: ' . $data['order_id']);
 	}
 
 	/**
@@ -1136,21 +1102,12 @@ class AdminSettings {
 	    // Get webhook secret from WordPress options
 	    $webhook_secret = get_plugin_option()['darb_assabil_webhook_secret'];
 	    
-	    $this->log('Webhook secret configured: ' . ($webhook_secret ? 'Yes' : 'No'));
-	    
 	    if (empty($webhook_secret)) {
-	        $this->log('Webhook secret not configured');
 	        return false;
 	    }
 	    
 	    // Calculate signature using webhook secret
 	    $expected_signature = hash('sha256', $payload . ":" . $webhook_secret);
-	    
-	    // Log for debugging
-	    $this->log('Payload: ' . $payload);
-	    $this->log('Webhook Secret (first 8 chars): ' . substr($webhook_secret, 0, 8) . '...');
-	    $this->log('Received signature: ' . $received_signature);
-	    $this->log('Expected signature: ' . $expected_signature);
 	    
 	    // Compare signatures using hash_equals to prevent timing attacks
 	    return hash_equals($expected_signature, $received_signature);
@@ -1182,9 +1139,7 @@ class AdminSettings {
 
 	        // Get saved payload
 	        $saved_payload = $order->get_meta('darb_assabil_api_payload');
-			$this->log('Saved payload: ' . print_r($saved_payload, true));
 
-	        
 	        // Reset processed flags
 	        delete_post_meta($order_id, '_darb_assabil_processed');
 	        delete_post_meta($order_id, '_darb_assabil_error');
@@ -1216,7 +1171,6 @@ class AdminSettings {
 	            wp_send_json_success('Order successfully retried');
 	        }
 	    } catch (Exception $e) {
-	        $this->log('Retry Error: ' . $e->getMessage());
 	        wp_send_json_error('Order retry failed: ' . $e->getMessage());
 	    }
 	}
@@ -1256,15 +1210,8 @@ class AdminSettings {
 	        $order->update_meta_data('darb_assabil_api_payload', $decoded_payload);
 	        $order->save();
 
-	        // Log successful update
-	        error_log('Payload saved successfully for order ' . $order_id);
-	        error_log('Payload: ' . print_r($decoded_payload, true));
-
 	        wp_send_json_success('Payload saved successfully');
 	    } catch (Exception $e) {
-	        error_log('Error saving payload: ' . $e->getMessage());
-	        error_log('Order ID: ' . $order_id);
-	        error_log('Raw payload: ' . $payload);
 	        wp_send_json_error($e->getMessage());
 	    }
 	}
