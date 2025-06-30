@@ -134,7 +134,7 @@ class OrderHandler {
 				})(),
 				'paymentBy'    => get_plugin_option()['payment_done_by_receiver'] === true ? 'receiver' : 'sender',
 				'to' => array(
-					'countryCode'   => 'lby22',
+					'countryCode'   => 'lby',
 					'city'      => $city_area['city'],
 					'area'      => $city_area['area'],
 					'address'  => $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2(),
@@ -173,7 +173,8 @@ class OrderHandler {
 
 		$response = wp_remote_post($api_url, $args );
 		if ( is_wp_error( $response ) ) {
-			throw new \Exception( 'API Error: ' . $response->get_error_message() );
+			// translators: %s: API error message
+            throw new \Exception( sprintf( esc_html__( 'API Error: %s', 'darb-assabil' ), esc_html( $response->get_error_message() ) ) );
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
@@ -200,21 +201,8 @@ class OrderHandler {
 		$order->save();
 
 		if ($response_code !== 200 ) {
-			throw new \Exception( "Order creation failed with status code: {$response_code}" );
+			// translators: %d: HTTP response code
+            throw new \Exception( sprintf( esc_html__( 'Order creation failed with status code: %d', 'darb-assabil' ), intval( $response_code ) ) );
 		}
-	}
-
-	/**
-	 * Log messages for debugging
-	 *
-	 * @param string $message The message to log.
-	 */
-	private function log($message) {
-		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
-		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
-		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
-
-		// Write the log message to the file
-		file_put_contents($log_file, $formatted_message, FILE_APPEND);
 	}
 }

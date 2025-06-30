@@ -162,18 +162,4 @@ class ShippingMethod extends \WC_Shipping_Method {
 
 		return $data ?? [];
 	}
-
-	/**
-	 * Log messages for debugging
-	 *
-	 * @param string $message The message to log.
-	 */
-	private function log($message) {
-		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
-		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
-		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
-
-		// Write the log message to the file
-		file_put_contents($log_file, $formatted_message, FILE_APPEND);
-	}
 }

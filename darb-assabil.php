@@ -8,7 +8,7 @@
  * @license   GPL v2 or later
  * @link      https://huruftech.com
  *
- * Plugin Name:     Darb Assabil Plugin
+ * Plugin Name:     Darb Assabil
  * Plugin URI:      https://sabil.ly/
  * Description:     A WordPress plugin for Darb Assabil
  * Version:         1.0.0
@@ -17,7 +17,7 @@
  * License:         GPL v2 or later
  * License URI:     https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:     darb-assabil
- * Domain Path:     /languages
+ * Domain Path:     darb-assabil
  * Requires PHP:    7.1
  * Requires WP:     5.5.0
  * Requires Plugins: woocommerce
@@ -30,6 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once plugin_dir_path(__FILE__) . 'src/Helpers.php';
+require_once plugin_dir_path(__FILE__) . 'src/Shortcodes.php';
 
 /**
  * Check if WooCommerce is active
@@ -42,11 +43,14 @@ function darb_assabil_check_woocommerce() {
 			?>
 			<div class="error">
 				<p>
-					<?php 
-					printf(
-						esc_html__( 'Darb Assabil requires WooCommerce to be installed and active. You can download %s here.', 'darb-assabil' ),
-						'<a href="https://wordpress.org/plugins/woocommerce/" target="_blank">WooCommerce</a>'
+					<?php
+					// translators: %s: WooCommerce download link (HTML anchor tag)
+					$message = sprintf(
+						/* translators: %s: WooCommerce download link (HTML anchor tag) */
+						__( 'Darb Assabil requires WooCommerce to be installed and active. You can download %s here.', 'darb-assabil' ),
+						'<a href="' . esc_url( 'https://wordpress.org/plugins/woocommerce/' ) . '" target="_blank" rel="noopener">WooCommerce</a>'
 					);
+					echo wp_kses_post( $message );
 					?>
 				</p>
 			</div>
