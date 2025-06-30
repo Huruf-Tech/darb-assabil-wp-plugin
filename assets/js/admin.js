@@ -38,7 +38,6 @@ jQuery(document).ready(function($) {
 
         } catch (e) {
             console.error('Error parsing JSON:', e);
-            console.log('Content:', content);
             alert('Error displaying data. Please check browser console for details.');
         }
     });

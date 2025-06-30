@@ -75,11 +75,11 @@ class Checkout {
 		
 		// Try to get country from POST data during checkout
 		if (empty($billing_country) && isset($_POST['billing_country'])) {
-			$billing_country = sanitize_text_field($_POST['billing_country']);
+			$billing_country = sanitize_text_field(wp_unslash($_POST['billing_country']));
 		}
 		
 		if (empty($shipping_country) && isset($_POST['shipping_country'])) {
-			$shipping_country = sanitize_text_field($_POST['shipping_country']);
+			$shipping_country = sanitize_text_field(wp_unslash($_POST['shipping_country']));
 		}
 
 		// Only modify cities if either country is Libya
@@ -172,31 +172,17 @@ class Checkout {
 		return $cities;
 	}
 
-	/**
-	 * Log messages for debugging
-	 *
-	 * @param string $message The message to log.
-	 */
-	private function log($message) {
-		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
-		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
-		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
-
-		// Write the log message to the file
-		file_put_contents($log_file, $formatted_message, FILE_APPEND);
-	}
-
 	function update_shipping_rate() {
-		if (!isset($_POST['city'])) {
-			wp_send_json_error('City or area not provided');
-		}
-		$city = sanitize_text_field($_POST['city']);
-	
-		// Optionally, store the city in the session for later use
-		WC()->session->set('selected_city', $city);
-	
-		wp_send_json_success('Shipping rate updated');
-	}
+        if (!isset($_POST['city'])) {
+            wp_send_json_error('City or area not provided');
+        }
+        $city = sanitize_text_field(wp_unslash($_POST['city']));
+    
+        // Optionally, store the city in the session for later use
+        WC()->session->set('selected_city', $city);
+    
+        wp_send_json_success('Shipping rate updated');
+    }
 }
 
 add_action('wp_enqueue_scripts', function () {

@@ -59,6 +59,10 @@ class AdminSettings {
 		add_action('wp_ajax_retry_darb_assabil_order', array($this, 'handle_retry_order'));
 		add_action('wp_ajax_save_darb_assabil_payload', array($this, 'handle_save_payload'));
 		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_styles'));
+
+		add_action('admin_head', array($this, 'custom_admin_footer_css'));
+		add_filter('admin_footer_text', array($this, 'custom_admin_footer_text'), 20);
+		add_filter('update_footer', array($this, 'custom_admin_footer_version'), 20);
 	}
 
 	/**
@@ -71,7 +75,7 @@ class AdminSettings {
 			'manage_woocommerce',
 			'darb-assabil-settings',
 			array( $this, 'render_settings_page' ),
-			'data:image/svg+xml;base64,' . base64_encode( file_get_contents( plugin_dir_path( __FILE__ ) . '../assets/DarbAssabil-Logo.svg' ) ),
+			'data:image/svg+xml;base64,' . base64_encode( file_get_contents( plugin_dir_path( __FILE__ ) . '../assets/img/DarbAssabil-Logo.svg' ) ),
 		);
 	}
 
@@ -79,29 +83,32 @@ class AdminSettings {
 	 * Register settings for the plugin
 	 */
 	public function register_settings() {
-	    // Register individual options
-	    // register_setting('darb_assabil_options', 'darb_assabil_bearer_token');
-	    register_setting('darb_assabil_options', 'darb_assabil_service_id');
-	    // register_setting('darb_assabil_options', 'darb_assabil_debug_mode', array(
-	    //     'type' => 'boolean',
-	    //     'sanitize_callback' => 'rest_sanitize_boolean',
-	    //     'default' => false,
-	    // ));
-	    register_setting('darb_assabil_options', 'darb_assabil_use_city_dropdown', array(
+	    // Register individual options with sanitization
+	    register_setting('darb_assabil_options', 'darb_assabil_service_id', [
+	        'type' => 'string',
+	        'sanitize_callback' => 'sanitize_text_field',
+	        'default' => ''
+	    ]);
+	    register_setting('darb_assabil_options', 'darb_assabil_use_city_dropdown', [
 	        'type' => 'boolean',
 	        'sanitize_callback' => 'rest_sanitize_boolean',
 	        'default' => true,
-	    ));
-	    register_setting('darb_assabil_options', 'darb_assabil_payment_done_by_receiver', array(
+	    ]);
+	    register_setting('darb_assabil_options', 'darb_assabil_payment_done_by_receiver', [
 	        'type' => 'boolean',
 	        'sanitize_callback' => 'rest_sanitize_boolean',
-	        'default' => true, // Set default value to true
-	    ));
-	    register_setting('darb_assabil_options', 'darb_assabil_include_product_payment', array(
+	        'default' => true,
+	    ]);
+	    register_setting('darb_assabil_options', 'darb_assabil_include_product_payment', [
 	        'type' => 'boolean',
 	        'sanitize_callback' => 'rest_sanitize_boolean',
-	        'default' => true, // Set default value to true
-	    ));
+	        'default' => true,
+	    ]);
+	    register_setting('darb_assabil_options', 'darb_assabil_webhook_secret', [
+	        'type' => 'string',
+	        'sanitize_callback' => 'sanitize_text_field',
+	        'default' => wp_generate_password(32, false),
+	    ]);
 
 	    add_settings_section(
 	        'darb_assabil_general',
@@ -177,48 +184,50 @@ class AdminSettings {
 	 * Render the settings page with tabs
 	 */
 	public function render_settings_page() {
-	    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders'; // Changed default to orders
+    $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'orders';
 
-	    ?>
-	    <div class="wrap">
-	        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-	        
-	        <!-- Tabs -->
-	        <h2 class="nav-tab-wrapper">
-	            <a href="?page=darb-assabil-settings&tab=orders" class="nav-tab <?php echo $current_tab === 'orders' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e('Orders', 'darb-assabil'); ?>
-	            </a>
-	            <a href="?page=darb-assabil-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e('Settings', 'darb-assabil'); ?>
-	            </a>
-	            <a href="?page=darb-assabil-settings&tab=integration" class="nav-tab <?php echo $current_tab === 'integration' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e('Integration', 'darb-assabil'); ?>
-	            </a>
-	            <a href="?page=darb-assabil-settings&tab=webhooks" class="nav-tab <?php echo $current_tab === 'webhooks' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e('Webhooks', 'darb-assabil'); ?>
-	            </a>
-	        </h2>
-
-	        <!-- Tab Content -->
-	        <?php if ($current_tab === 'webhooks'): ?>
-	            <?php $this->render_webhook_tab(); ?>
-	        <?php elseif ($current_tab === 'orders'): ?>
-	            <?php $this->render_orders_tab(); ?>
-	        <?php else: ?>
-	            <form action="options.php" method="post">
-	                <?php
-	                if ($current_tab === 'settings') {
-	                    settings_fields('darb_assabil_options');
-	                    do_settings_sections('darb-assabil-settings');
-	                    submit_button();
-	                } elseif ($current_tab === 'integration') {
-	                    $this->render_integrate_tab();
-	                }
-	                ?>
-	            </form>
-	        <?php endif; ?>
-	    </div>
-	    <?php
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        
+        <!-- Tabs -->
+        <h2 class="nav-tab-wrapper">
+            <a href="?page=darb-assabil-settings&amp;tab=orders" class="nav-tab <?php echo esc_attr($current_tab === 'orders' ? 'nav-tab-active' : ''); ?>">
+                <?php esc_html_e('Orders', 'darb-assabil'); ?>
+            </a>
+            <a href="?page=darb-assabil-settings&amp;tab=settings" class="nav-tab <?php echo esc_attr($current_tab === 'settings' ? 'nav-tab-active' : ''); ?>">
+                <?php esc_html_e('Settings', 'darb-assabil'); ?>
+            </a>
+            <a href="?page=darb-assabil-settings&amp;tab=integration" class="nav-tab <?php echo esc_attr($current_tab === 'integration' ? 'nav-tab-active' : ''); ?>">
+                <?php esc_html_e('Integration', 'darb-assabil'); ?>
+            </a>
+            <a href="?page=darb-assabil-settings&amp;tab=webhooks" class="nav-tab <?php echo esc_attr($current_tab === 'webhooks' ? 'nav-tab-active' : ''); ?>">
+                <?php esc_html_e('Webhooks', 'darb-assabil'); ?>
+            </a>
+            <a href="?page=darb-assabil-settings&amp;tab=shortcode" class="nav-tab <?php echo esc_attr($current_tab === 'shortcode' ? 'nav-tab-active' : ''); ?>">
+                <?php esc_html_e('Short Code', 'darb-assabil'); ?>
+            </a>
+        </h2>
+        <!-- Tab Content -->
+        <?php if ($current_tab === 'webhooks'): ?>
+            <?php $this->render_webhook_tab(); ?>
+        <?php elseif ($current_tab === 'orders'): ?>
+            <?php $this->render_orders_tab(); ?>
+        <?php elseif ($current_tab === 'integration'): ?>
+            <?php $this->render_integrate_tab(); ?>
+        <?php elseif ($current_tab === 'settings'): ?>
+            <form action="options.php" method="post">
+                <?php
+                settings_fields('darb_assabil_options');
+                do_settings_sections('darb-assabil-settings');
+                submit_button();
+                ?>
+            </form>
+        <?php elseif ($current_tab === 'shortcode'): ?>
+            <?php $this->render_shortcode_tab(); ?>
+        <?php endif; ?>
+    </div>
+    <?php
 	}
 
 	/**
@@ -344,7 +353,7 @@ class AdminSettings {
 	                                <?php if ($darb_status === 'failed' || !$darb_status) : ?>
 	                                    <button type="button" class="button retry-order" 
 	                                            data-order-id="<?php echo esc_attr($order->get_id()); ?>"
-	                                            data-nonce="<?php echo wp_create_nonce('retry-darb-assabil-order'); ?>">
+	                                            data-nonce="<?php echo esc_attr(wp_create_nonce('retry-darb-assabil-order')); ?>">
 	                                        <?php esc_html_e('Retry', 'darb-assabil'); ?>
 	                                    </button>
 	                                <?php endif; ?>
@@ -401,7 +410,7 @@ class AdminSettings {
 
 	        <form method="post">
 	            <input type="hidden" name="darb_assabil_logout" value="1">
-	            <?php submit_button(__('Logout from Darb Assabil', 'darb-assabil'), 'primary'); ?>
+	            <?php submit_button( esc_html__('Logout from Darb Assabil', 'darb-assabil'), 'primary' ); ?>
 	        </form>
 
 	        <?php
@@ -449,7 +458,7 @@ class AdminSettings {
 	    <?php endif; ?>
 
 	    <?php if (!empty($login_url)) : ?>
-	        <a href="<?php echo $login_url; ?>" class="button button-primary">
+	        <a href="<?php echo esc_url($login_url); ?>" class="button button-primary">
 	            <?php esc_html_e('Login in Darb Assabil', 'darb-assabil'); ?>
 	        </a>
 	    <?php endif; ?>
@@ -555,17 +564,17 @@ class AdminSettings {
 		$services = $this->get_services();
 		
 		echo '<select name="darb_assabil_service_id" id="darb_assabil_service_id">';
-		echo '<option value="">' . __('Select a service', 'darb-assabil') . '</option>';
+		echo '<option value="">' . esc_html__('Select a service', 'darb-assabil') . '</option>';
 		
 		foreach ($services as $service) {
 			$selected = selected($selected_service, $service['id'], false);
-			echo '<option value="' . esc_attr($service['id']) . '" ' . $selected . '>';
+			echo '<option value="' . esc_attr($service['id']) . '" ' . esc_attr($selected) . '>';
 			echo esc_html($service['service']);
 			echo '</option>';
 		}
 		
 		echo '</select>';
-		echo '<p class="description">' . __('Select the default service for shipping', 'darb-assabil') . '</p>';
+		echo '<p class="description">' . esc_html__('Select the default service for shipping', 'darb-assabil') . '</p>';
 	}
 
 	/**
@@ -634,19 +643,6 @@ class AdminSettings {
 	public function get_option( $key, $default = '' ) {
 		$options = get_option( $this->option_name );
 		return isset( $options[$key] ) ? $key : $default;
-	}
-	/**
-	 * Log messages for debugging
-	 *
-	 * @param string $message The message to log.
-	 */
-	private function log($message) {
-		$log_file = plugin_dir_path(__FILE__) . '../debug-plugin.log'; // Path to the debug-plugin.log file
-		$timestamp = date('Y-m-d H:i:s'); // Add a timestamp to each log entry
-		$formatted_message = "[{$timestamp}] {$message}" . PHP_EOL;
-
-		// Write the log message to the file
-		file_put_contents($log_file, $formatted_message, FILE_APPEND);
 	}
 
 	/**
@@ -818,17 +814,18 @@ class AdminSettings {
 
 	    $order = wc_get_order($wc_order_id);
 	    if (!$order) {
-	        throw new Exception('Order not found: ' . $wc_order_id);
+	        throw new Exception( esc_html__('Order not found', 'darb-assabil') );
 	    }
 
 	    // Update order status and metadata
-	    $order->update_status(
-	        $wc_status,
-	        sprintf(
-	            __('Darb Assabil shipment status changed to: %s (Request ID: %s)', 'darb-assabil'),
-	            $darb_status,
-	            $data['requestId']
-	        )
+	    // translators: 1: Darb Assabil shipment status, 2: Request ID
+        $order->update_status(
+            $wc_status,
+            sprintf(
+	        __('Darb Assabil shipment status changed to: %1$s (Request ID: %2$s)', 'darb-assabil'),
+                $darb_status,
+                $data['requestId']
+            )
 	    );
 
 	    // Store Darb Assabil metadata
@@ -867,7 +864,10 @@ class AdminSettings {
 	    // Update WooCommerce order status
 	    $order = wc_get_order($data['order_id']);
 	    if ($order) {
-	        $order->update_status('processing', __('Order created in Darb Assabil', 'darb-assabil'));
+	        $order->update_status('processing', 
+                // translators: Order created in Darb Assabil
+                __('Order created in Darb Assabil', 'darb-assabil')
+            );
 	        $order->update_meta_data('darb_assabil_tracking_id', $data['tracking_id']);
 	        $order->save();
 	    }
@@ -897,7 +897,10 @@ class AdminSettings {
 	    
 	    $order = wc_get_order($data['order_id']);
 	    if ($order) {
-	        $order->update_status('cancelled', __('Order cancelled in Darb Assabil', 'darb-assabil'));
+	        $order->update_status('cancelled', 
+                // translators: Order cancelled in Darb Assabil
+                __('Order cancelled in Darb Assabil', 'darb-assabil')
+            );
 	        $order->save();
 	    }
 	    
@@ -915,7 +918,10 @@ class AdminSettings {
 	    $order = wc_get_order($data['order_id']);
 	    if ($order) {
 	        $order->update_meta_data('darb_assabil_shipment_id', $data['shipment_id']);
-	        $order->update_status('processing', __('Shipment created in Darb Assabil', 'darb-assabil'));
+	        $order->update_status('processing', 
+                // translators: Shipment created in Darb Assabil
+                __('Shipment created in Darb Assabil', 'darb-assabil')
+            );
 	        $order->save();
 	    }
 	    
@@ -944,7 +950,10 @@ class AdminSettings {
 	    
 	    $order = wc_get_order($data['order_id']);
 	    if ($order) {
-	        $order->update_status('completed', __('Order delivered by Darb Assabil', 'darb-assabil'));
+	        $order->update_status('completed', 
+                // translators: Order delivered by Darb Assabil
+                __('Order delivered by Darb Assabil', 'darb-assabil')
+            );
 	        $order->update_meta_data('darb_assabil_delivered_at', current_time('mysql'));
 	        $order->save();
 	    }
@@ -964,9 +973,10 @@ class AdminSettings {
 	    if ($order) {
 	        $order->payment_complete();
 	        $order->add_order_note(
+	        // translators: %s: Amount received
 	            sprintf(
-	                __('Payment of %s received via Darb Assabil', 'darb-assabil'),
-	                wc_price($data['amount'])
+	            __('Payment of %s received via Darb Assabil', 'darb-assabil'),
+	            wc_price($data['amount'])
 	            )
 	        );
 	    }
@@ -984,7 +994,10 @@ class AdminSettings {
 	    
 	    $order = wc_get_order($data['order_id']);
 	    if ($order) {
-	        $order->update_status('failed', __('Payment failed in Darb Assabil', 'darb-assabil'));
+	        $order->update_status('failed', 
+                // translators: Payment failed in Darb Assabil
+                __('Payment failed in Darb Assabil', 'darb-assabil')
+            );
 	    }
 	    
 	    do_action('darb_assabil_webhook_payment_failed', $data);
@@ -1068,7 +1081,9 @@ class AdminSettings {
 	                                    <?php
 	                                    $response_status = isset($log['response']['status']) ? $log['response']['status'] : 'unknown';
 	                                    $status_class = $response_status === 'success' ? 'status-success' : 'status-error';
-	                                    $status_text = $response_status === 'success' ? __('Success', 'darb-assabil') : __('Failed', 'darb-assabil');
+	                                    $status_text = $response_status === 'success'
+	                                        ? esc_html__('Success', 'darb-assabil')
+	                                        : esc_html__('Failed', 'darb-assabil');
 	                                    ?>
 	                                    <span class="response-status <?php echo esc_attr($status_class); ?>">
 	                                        <?php echo esc_html($status_text); ?>
@@ -1134,7 +1149,7 @@ class AdminSettings {
 	        // Get the order
 	        $order = wc_get_order($order_id);
 	        if (!$order) {
-	            throw new Exception('Order not found');
+	            throw new Exception( esc_html__('Order not found', 'darb-assabil') );
 	        }
 
 	        // Get saved payload
@@ -1197,7 +1212,7 @@ class AdminSettings {
 	    try {
 	        $order = wc_get_order($order_id);
 	        if (!$order) {
-	            throw new Exception('Order not found');
+	            throw new Exception( esc_html__('Order not found', 'darb-assabil') );
 	        }
 
 	        // Validate JSON
@@ -1250,9 +1265,60 @@ class AdminSettings {
 	        array(
 	            'payloadNonce' => wp_create_nonce('save-darb-assabil-payload'),
 	            'retryNonce' => wp_create_nonce('retry-darb-assabil-order'),
-	            'hideDetailsText' => __('Hide Details', 'darb-assabil'),
-	            'viewDetailsText' => __('View Details', 'darb-assabil')
+	            'hideDetailsText' => esc_html__('Hide Details', 'darb-assabil'),
+	            'viewDetailsText' => esc_html__('View Details', 'darb-assabil')
 	        )
 	    );
 	}
+
+	/**
+	 * Render the Shortcode tab content
+	 */
+	public function render_shortcode_tab() {
+    ?>
+    <div class="darb-assabil-shortcode-tab">
+        <h2><?php esc_html_e('Tracking Shortcode', 'darb-assabil'); ?></h2>
+        <p>
+            <?php esc_html_e('You can allow your customers to track their shipments directly from your website using the following shortcode:', 'darb-assabil'); ?>
+        </p>
+        <pre style="background:#f8f8f8;padding:10px 15px;border-radius:5px;border:1px solid #eee;font-size:16px;">[darb_assabil_tracking]</pre>
+        <p>
+            <?php esc_html_e('How to use:', 'darb-assabil'); ?>
+        </p>
+        <ol>
+            <li><?php esc_html_e('Copy the shortcode above.', 'darb-assabil'); ?></li>
+            <li><?php esc_html_e('Paste it into any page, post, or widget where you want to display the shipment tracking form.', 'darb-assabil'); ?></li>
+            <li><?php esc_html_e('Publish or update the page. Your customers will now be able to enter their tracking number and see the shipment status.', 'darb-assabil'); ?></li>
+        </ol>
+        <p>
+            <?php esc_html_e('Example:', 'darb-assabil'); ?><br>
+            <code>[darb_assabil_tracking]</code>
+        </p>
+        <p>
+            <?php esc_html_e('This will display a tracking form and timeline styled according to your theme.', 'darb-assabil'); ?>
+        </p>
+    </div>
+    <?php
+}
+
+public function custom_admin_footer_css() {
+    $screen = get_current_screen();
+    if ($screen && $screen->id === 'toplevel_page_darb-assabil-settings') {
+        echo '<style>#wpfooter {display:block !important;}</style>';
+    }
+}
+public function custom_admin_footer_text($text) {
+    $screen = get_current_screen();
+    if ($screen && $screen->id === 'toplevel_page_darb-assabil-settings') {
+        return '<span id="darb-credit"><img src="' . esc_url(plugins_url('assets/img/huruf-logo.png', dirname(__FILE__))) . '" alt="Darb Assabil" style="height:22px;vertical-align:middle;margin-right:8px;"><span>Powered by <a href="https://huruftech.com/" target="_blank" style="color:inherit;text-decoration:underline;">Huruf Tech</a></span></span>';
+    }
+    return $text;
+}
+public function custom_admin_footer_version($text) {
+    $screen = get_current_screen();
+    if ($screen && $screen->id === 'toplevel_page_darb-assabil-settings') {
+        return '<span>v1.0.0</span> <span>&copy; ' . gmdate('Y') . ' HurufTech</span>';
+    }
+    return $text;
+}
 }
