@@ -66,7 +66,9 @@ class OrderHandler {
 
 			// Early check for Libya orders
 			$shipping_country = $order->get_shipping_country();
-			if ($shipping_country !== 'LY') {
+			$country = $shipping_country ?: 'LY';
+
+			if ($country !== 'LY') {
 				return;
 			}
 

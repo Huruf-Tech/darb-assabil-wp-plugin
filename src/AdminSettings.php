@@ -600,6 +600,7 @@ class AdminSettings {
 	    }
 
 	    $body = wp_remote_retrieve_body($response);
+
 	    $data = json_decode($body, true);
 
 	    if (!empty($data['data'])) {
